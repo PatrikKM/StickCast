@@ -55,6 +55,8 @@ public partial class MainWindow : Window
     private int _currentFileIndex = -1;
     private bool _playingFromPlaylist;
     private long _playbackEpoch;
+    private long _playRequestId;
+    private string? _lastPlayedUrl;
     private int _consecutivePollFailures;
     private int _pollCount;
 

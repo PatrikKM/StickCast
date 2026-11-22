@@ -122,8 +122,7 @@ public partial class MainWindow
 
     private void YtResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_uiReady && YtResultsList.SelectedIndex >= 0)
-            _currentYtIndex = YtResultsList.SelectedIndex;
+        // Keep _currentYtIndex pointed at the actually playing item until playback starts
     }
 
     private async void PlaySelectedYt_Click(object sender, RoutedEventArgs e)
@@ -448,7 +447,7 @@ public partial class MainWindow
             foreach (var item in results) _ytResults.Add(item);
             if (_ytResults.Count > 0)
             {
-                _currentYtIndex = 0;
+                _currentYtIndex = -1;
                 YtResultsList.SelectedIndex = 0;
             }
 
@@ -471,21 +470,24 @@ public partial class MainWindow
     {
         if (_ytResults.Count == 0) return;
 
+        int baseIdx = _currentYtIndex >= 0
+            ? _currentYtIndex
+            : (YtResultsList.SelectedIndex >= 0 ? YtResultsList.SelectedIndex : -1);
+
         for (int attempt = 0; attempt < 3; attempt++)
         {
-            int baseIdx = _currentYtIndex >= 0
-                ? _currentYtIndex
-                : (YtResultsList.SelectedIndex >= 0 ? YtResultsList.SelectedIndex : -1);
-
             int nextIdx = baseIdx + 1;
             if (nextIdx >= 0 && nextIdx < _ytResults.Count)
             {
                 var next = _ytResults[nextIdx];
+                baseIdx = nextIdx;
                 _currentYtIndex = nextIdx;
                 _playingFromYtSearch = true;
                 YtResultsList.SelectedIndex = nextIdx;
                 YtResultsList.ScrollIntoView(next);
-                if (await PlayUrlAsync(next.Url, ytIndex: nextIdx))
+                long reqBefore = _playRequestId;
+                bool ok = await PlayUrlAsync(next.Url, ytIndex: nextIdx, allowSkipOnError: true);
+                if (ok || _playRequestId != reqBefore + 1)
                     return;
                 Log($"Přeskakuji nedostupnou položku: {next.Title}");
                 continue;
@@ -499,11 +501,14 @@ public partial class MainWindow
                 if (_ytPageIndex > prevPage && _ytResults.Count > 0)
                 {
                     var first = _ytResults[0];
+                    baseIdx = 0;
                     _currentYtIndex = 0;
                     _playingFromYtSearch = true;
                     YtResultsList.SelectedIndex = 0;
                     YtResultsList.ScrollIntoView(first);
-                    if (await PlayUrlAsync(first.Url, ytIndex: 0))
+                    long reqBefore = _playRequestId;
+                    bool ok = await PlayUrlAsync(first.Url, ytIndex: 0, allowSkipOnError: true);
+                    if (ok || _playRequestId != reqBefore + 1)
                         return;
                     continue;
                 }
@@ -549,7 +554,7 @@ public partial class MainWindow
         }
     }
 
-    private async Task<bool> PlayUrlAsync(string input, int? ytIndex = null)
+    private async Task<bool> PlayUrlAsync(string input, int? ytIndex = null, bool allowSkipOnError = false)
     {
         var url = input.Trim();
         if (url.Length == 0) return false;
@@ -573,9 +578,15 @@ public partial class MainWindow
 
         if (RequireDevice() is not { } r) return false;
 
-        // Cancel any in-flight yt-dlp resolution so pressing Next responds immediately
+        long myReqId = ++_playRequestId;
         try { _resolveCts?.Cancel(); } catch { }
         await _playLock.WaitAsync(_cts.Token);
+        if (myReqId != _playRequestId)
+        {
+            _playLock.Release();
+            return false;
+        }
+
         using var resolveCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         _resolveCts = resolveCts;
         _isStartingPlayback = true;
@@ -587,6 +598,24 @@ public partial class MainWindow
                 StopScreenStream();
                 StopTranscodeStream();
                 _slideshowTimer.Stop();
+
+                _lastPlayedUrl = url;
+                int matchedYtIdx = ytIndex ?? -1;
+                if (matchedYtIdx < 0)
+                {
+                    for (int i = 0; i < _ytResults.Count; i++)
+                    {
+                        if (_ytResults[i].Url.Equals(url, StringComparison.OrdinalIgnoreCase))
+                        {
+                            matchedYtIdx = i;
+                            break;
+                        }
+                    }
+                }
+                _playingFromYtSearch = matchedYtIdx >= 0;
+                _currentYtIndex = matchedYtIdx;
+                if (matchedYtIdx >= 0 && YtResultsList.SelectedIndex != matchedYtIdx)
+                    YtResultsList.SelectedIndex = matchedYtIdx;
 
                 var playUrl = url;
                 bool resolvedByYtDlp = false;
@@ -612,8 +641,14 @@ public partial class MainWindow
                             Log("yt-dlp → " + playUrl);
                             if (subPath != null) Log($"Titulky ({subSource}): {subPath}");
                         }
-                        catch (OperationCanceledException) when (! _cts.IsCancellationRequested)
+                        catch (OperationCanceledException) when (!_cts.IsCancellationRequested)
                         {
+                            return;
+                        }
+                        catch (Exception ex) when (allowSkipOnError)
+                        {
+                            Log($"Nelze získat stream ({ex.Message})");
+                            SetStatus($"Přeskakuji nedostupnou skladbu…");
                             return;
                         }
                         catch (Exception ex) when (!YtDlp.IsVideoPortal(url))
@@ -633,22 +668,6 @@ public partial class MainWindow
 
                 BeginPlayback();
                 _playingFromPlaylist = false;
-                int matchedYtIdx = ytIndex ?? -1;
-                if (matchedYtIdx < 0)
-                {
-                    for (int i = 0; i < _ytResults.Count; i++)
-                    {
-                        if (_ytResults[i].Url.Equals(url, StringComparison.OrdinalIgnoreCase))
-                        {
-                            matchedYtIdx = i;
-                            break;
-                        }
-                    }
-                }
-                _playingFromYtSearch = matchedYtIdx >= 0;
-                _currentYtIndex = matchedYtIdx;
-                if (matchedYtIdx >= 0 && YtResultsList.SelectedIndex != matchedYtIdx)
-                    YtResultsList.SelectedIndex = matchedYtIdx;
                 SetStatus(r.IsLocalMonitor ? "Otevírám na monitoru PC…" : "Posílám na TV…");
 
                 var detectedMime = resolvedByYtDlp && !playUrl.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)

@@ -23,7 +23,10 @@ public partial class MainWindow
                     mon,
                     s => Dispatcher.BeginInvoke(() => Log(s)),
                     onPrevTrack: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(PrevAsync)),
-                    onNextTrack: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(NextAsync)));
+                    onNextTrack: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(NextAsync)),
+                    onStopRequested: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(StopPlaybackAsync)),
+                    onMediaEnded: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(OnLocalMonitorMediaEndedAsync)),
+                    onStateChanged: st => Dispatcher.BeginInvoke(() => OnLocalMonitorStateChanged(st)));
                 _localMonitorHosts[id] = host;
             }
             else

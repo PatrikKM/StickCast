@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using StickCast.Net;
@@ -7,6 +8,13 @@ namespace StickCast;
 
 public partial class MainWindow
 {
+    private bool IsYtAutoPlayEnabled()
+    {
+        if (YtAutoPlayCombo?.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+            return tag.Equals("true", StringComparison.OrdinalIgnoreCase);
+        return _settings.YtAutoPlayNext;
+    }
+
     private void BeginPlayback()
     {
         _playbackEpoch++;
@@ -21,60 +29,142 @@ public partial class MainWindow
         _pollTimer.Start();
     }
 
-    private async void Resume_Click(object sender, RoutedEventArgs e) =>
-        await SafeAsync(async () =>
+    private void OnLocalMonitorStateChanged(string state)
+    {
+        if (Current is not { IsLocalMonitor: true }) return;
+        _lastState = state;
+        if (state == "PLAYING")
         {
-            if (RequireDevice() is { } r)
+            _userStopped = false;
+            _pcPlaybackActive = true;
+            StateText.Text = "▶ přehrává";
+            if (!_pollTimer.IsEnabled) _pollTimer.Start();
+        }
+        else if (state == "PAUSED_PLAYBACK")
+        {
+            StateText.Text = "⏸ pozastaveno";
+        }
+        else if (state == "STOPPED")
+        {
+            StateText.Text = "⏹ zastaveno";
+        }
+        SyncMiniPlayer();
+    }
+
+    private async Task OnLocalMonitorMediaEndedAsync()
+    {
+        if (Current is not { IsLocalMonitor: true } || _userStopped || _isStartingPlayback)
+            return;
+
+        _lastState = "STOPPED";
+        StateText.Text = "⏹ zastaveno";
+        SyncMiniPlayer();
+
+        if (_playingFromPlaylist)
+        {
+            if (AutoNextCheck.IsChecked == true)
             {
-                _playbackEpoch++;
-                _userStopped = false;
-                await r.ResumeAsync();
+                int next = GetNextPlaylistIndex(manual: false);
+                if (next >= 0)
+                {
+                    Log("Konec souboru → další v playlistu");
+                    await PlayFileAsync(next);
+                    return;
+                }
             }
-        });
+        }
+        else if (IsYtAutoPlayEnabled() && _ytResults.Count > 0)
+        {
+            Log("Konec skladby/videa → automaticky další vyhledaná položka");
+            await PlayNextYtResultAsync();
+            return;
+        }
+
+        _pcPlaybackActive = false;
+        _pollTimer.Stop();
+        SetStatus("Přehrávání dokončeno");
+    }
+
+    private async void Resume_Click(object sender, RoutedEventArgs e) =>
+        await SafeAsync(ResumePlaybackAsync);
+
+    private async Task ResumePlaybackAsync()
+    {
+        if (RequireDevice() is not { } r) return;
+        _playbackEpoch++;
+
+        if (!r.IsLocalMonitor && (_userStopped || _lastState is "STOPPED" or "NO_MEDIA_PRESENT" or ""))
+        {
+            if (_playingFromPlaylist && _currentFileIndex >= 0 && _currentFileIndex < _files.Count)
+            {
+                await PlayFileAsync(_currentFileIndex);
+                return;
+            }
+            if (!string.IsNullOrWhiteSpace(_lastPlayedUrl))
+            {
+                await PlayUrlAsync(_lastPlayedUrl, _currentYtIndex >= 0 ? _currentYtIndex : null);
+                return;
+            }
+        }
+
+        _userStopped = false;
+        _pcPlaybackActive = true;
+        await r.ResumeAsync();
+        _lastState = "PLAYING";
+        StateText.Text = "▶ přehrává";
+        _ignoreStateUntil = DateTime.UtcNow.AddSeconds(2);
+        if (!_pollTimer.IsEnabled) _pollTimer.Start();
+        SyncMiniPlayer();
+    }
 
     private async void Pause_Click(object sender, RoutedEventArgs e) =>
-        await SafeAsync(async () =>
-        {
-            if (RequireDevice() is { } r)
-            {
-                _playbackEpoch++;
-                await r.PauseAsync();
-            }
-        });
+        await SafeAsync(PausePlaybackAsync);
+
+    private async Task PausePlaybackAsync()
+    {
+        if (RequireDevice() is not { } r) return;
+        _playbackEpoch++;
+        await r.PauseAsync();
+        _lastState = "PAUSED_PLAYBACK";
+        StateText.Text = "⏸ pozastaveno";
+        _ignoreStateUntil = DateTime.UtcNow.AddSeconds(2);
+        SyncMiniPlayer();
+    }
 
     private async void Stop_Click(object sender, RoutedEventArgs e) =>
         await SafeAsync(StopPlaybackAsync);
 
     private async Task StopPlaybackAsync()
     {
+        try { _resolveCts?.Cancel(); } catch { }
         StopScreenStream();
         StopTranscodeStream();
         _slideshowTimer.Stop();
         _pcPlaybackActive = false;
         _pollTimer.Stop();
-        if (RequireDevice() is not { } r) return;
         _playbackEpoch++;
         _userStopped = true;
         _lastState = "STOPPED";
-        await r.StopAsync();
-        NowPlayingText.Text = "Nic se nepřehrává";
+        StateText.Text = "⏹ zastaveno";
         _lastPosition = TimeSpan.Zero;
         PositionSlider.Value = 0;
         PosText.Text = "0:00:00";
         SyncMiniPlayer();
+        SetStatus("Přehrávání zastaveno");
+
+        if (Current is { } r)
+        {
+            try { await r.StopAsync(); } catch { }
+        }
     }
 
     private async Task TogglePauseResumeAsync()
     {
         if (RequireDevice() is not { } r) return;
-        _playbackEpoch++;
-        if (_lastState == "PLAYING")
-            await r.PauseAsync();
+        if (_lastState == "PLAYING" && !_userStopped)
+            await PausePlaybackAsync();
         else
-        {
-            _userStopped = false;
-            await r.ResumeAsync();
-        }
+            await ResumePlaybackAsync();
     }
 
     private void PositionSlider_MouseDown(object sender, MouseButtonEventArgs e) => _seekDragging = true;
@@ -250,7 +340,11 @@ public partial class MainWindow
             }
             DurText.Text = DlnaRenderer.FormatTime(dur);
 
-            if (DateTime.UtcNow > _ignoreStateUntil)
+            if (state is "PLAYING" or "PAUSED_PLAYBACK")
+            {
+                _lastState = state;
+            }
+            else if (!r.IsLocalMonitor && DateTime.UtcNow > _ignoreStateUntil)
             {
                 bool finished = _lastState == "PLAYING" && state is "STOPPED" or "NO_MEDIA_PRESENT";
                 if (finished && !_userStopped)
@@ -267,7 +361,7 @@ public partial class MainWindow
                             return;
                         }
                     }
-                    else if (_playingFromYtSearch && _settings.YtAutoPlayNext && _ytResults.Count > 0)
+                    else if (!_playingFromPlaylist && IsYtAutoPlayEnabled() && _ytResults.Count > 0)
                     {
                         Log("Konec skladby/videa → automaticky další vyhledaná položka");
                         _lastState = "";

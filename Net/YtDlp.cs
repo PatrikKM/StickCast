@@ -24,7 +24,8 @@ internal static class YtDlp
     private const string FormatSelector =
         "best[protocol=https][ext=mp4][vcodec^=avc1][acodec!=none]/" +
         "best[protocol=http][ext=mp4][vcodec^=avc1][acodec!=none]/" +
-        "18/best[ext=mp4][vcodec^=avc1][acodec!=none]/best[ext=mp4][acodec!=none]/best[acodec!=none]/best";
+        "18/best[protocol=https][ext=mp4][acodec!=none]/" +
+        "best[protocol=https][acodec!=none]/best[ext=mp4][acodec!=none]/best[acodec!=none]/best";
 
     public static string? Find() => ToolDownloader.FindTool("yt-dlp.exe");
 
@@ -486,7 +487,7 @@ internal static class YtDlp
     internal static string? ExtractDirectMediaUrl(JsonElement root)
     {
         var direct = GetJsonString(root, "url");
-        if (IsPlayableStreamUrl(direct)) return direct;
+        if (IsDirectHttpStreamUrl(direct)) return direct;
 
         if (root.TryGetProperty("requested_downloads", out var reqDl) &&
             reqDl.ValueKind == JsonValueKind.Array)
@@ -494,9 +495,51 @@ internal static class YtDlp
             foreach (var item in reqDl.EnumerateArray())
             {
                 var u = GetJsonString(item, "url");
-                if (IsPlayableStreamUrl(u)) return u;
+                if (IsDirectHttpStreamUrl(u)) return u;
             }
         }
+
+        string? bestProgressiveMp4 = null;
+        string? bestHttpWithAudio = null;
+        string? bestAny = null;
+
+        if (root.TryGetProperty("formats", out var formats) &&
+            formats.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var fmt in formats.EnumerateArray())
+            {
+                var ext = GetJsonString(fmt, "ext") ?? "";
+                var protocol = GetJsonString(fmt, "protocol") ?? "";
+                if (ext.Equals("mhtml", StringComparison.OrdinalIgnoreCase) ||
+                    protocol.Equals("mhtml", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var u = GetJsonString(fmt, "url");
+                if (!IsPlayableStreamUrl(u)) continue;
+
+                bool isDirectHttp = (protocol.Equals("https", StringComparison.OrdinalIgnoreCase) ||
+                                     protocol.Equals("http", StringComparison.OrdinalIgnoreCase) ||
+                                     string.IsNullOrEmpty(protocol)) &&
+                                    IsDirectHttpStreamUrl(u);
+
+                var acodec = GetJsonString(fmt, "acodec") ?? "";
+                var vcodec = GetJsonString(fmt, "vcodec") ?? "";
+                bool hasAudio = !string.IsNullOrEmpty(acodec) && !acodec.Equals("none", StringComparison.OrdinalIgnoreCase);
+                bool hasVideo = !string.IsNullOrEmpty(vcodec) && !vcodec.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+                if (isDirectHttp && hasAudio && hasVideo && ext.Equals("mp4", StringComparison.OrdinalIgnoreCase))
+                    bestProgressiveMp4 = u;
+                if (isDirectHttp && hasAudio)
+                    bestHttpWithAudio = u;
+                if (hasAudio || hasVideo)
+                    bestAny = u;
+            }
+        }
+
+        if (bestProgressiveMp4 != null) return bestProgressiveMp4;
+        if (bestHttpWithAudio != null) return bestHttpWithAudio;
+
+        if (IsPlayableStreamUrl(direct)) return direct;
 
         if (root.TryGetProperty("requested_formats", out var reqFmt) &&
             reqFmt.ValueKind == JsonValueKind.Array)
@@ -519,41 +562,13 @@ internal static class YtDlp
             if (anyUrl != null) return anyUrl;
         }
 
-        if (root.TryGetProperty("formats", out var formats) &&
-            formats.ValueKind == JsonValueKind.Array)
-        {
-            string? bestProgressiveMp4 = null;
-            string? bestWithAudio = null;
-            string? bestAny = null;
-
-            foreach (var fmt in formats.EnumerateArray())
-            {
-                var ext = GetJsonString(fmt, "ext") ?? "";
-                var protocol = GetJsonString(fmt, "protocol") ?? "";
-                if (ext.Equals("mhtml", StringComparison.OrdinalIgnoreCase) ||
-                    protocol.Equals("mhtml", StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                var u = GetJsonString(fmt, "url");
-                if (!IsPlayableStreamUrl(u)) continue;
-
-                var acodec = GetJsonString(fmt, "acodec") ?? "";
-                var vcodec = GetJsonString(fmt, "vcodec") ?? "";
-                bool hasAudio = !string.IsNullOrEmpty(acodec) && !acodec.Equals("none", StringComparison.OrdinalIgnoreCase);
-                bool hasVideo = !string.IsNullOrEmpty(vcodec) && !vcodec.Equals("none", StringComparison.OrdinalIgnoreCase);
-
-                if (hasAudio && hasVideo && ext.Equals("mp4", StringComparison.OrdinalIgnoreCase))
-                    bestProgressiveMp4 = u;
-                if (hasAudio)
-                    bestWithAudio = u;
-                bestAny = u;
-            }
-
-            return bestProgressiveMp4 ?? bestWithAudio ?? bestAny;
-        }
-
-        return null;
+        return bestAny;
     }
+
+    private static bool IsDirectHttpStreamUrl(string? url) =>
+        IsPlayableStreamUrl(url) &&
+        !url!.Contains("manifest.googlevideo.com", StringComparison.OrdinalIgnoreCase) &&
+        !url.Contains(".m3u8", StringComparison.OrdinalIgnoreCase);
 
     private static bool TryExtractFirstEntryWatchUrl(JsonElement root, out string? watchUrl)
     {

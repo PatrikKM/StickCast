@@ -25,6 +25,10 @@ public partial class LocalMonitorWindow : Window
     private List<SubtitleCue> _cues = new();
     private string _state = "STOPPED";
     private TimeSpan _duration = TimeSpan.Zero;
+    private string? _lastUrl;
+    private string _lastTitle = "";
+    private string _lastMime = "video/mp4";
+    private string? _lastSubtitleUrl;
     private bool _isFullscreen;
     private bool _allowClose;
     private bool _seekDragging;
@@ -34,17 +38,26 @@ public partial class LocalMonitorWindow : Window
     private readonly Action<string>? _log;
     private readonly Action? _onPrevTrack;
     private readonly Action? _onNextTrack;
+    private readonly Action? _onStopRequested;
+    private readonly Action? _onMediaEnded;
+    private readonly Action<string>? _onStateChanged;
 
     internal LocalMonitorWindow(
         MonitorChoice monitor,
         Action<string>? log = null,
         Action? onPrevTrack = null,
-        Action? onNextTrack = null)
+        Action? onNextTrack = null,
+        Action? onStopRequested = null,
+        Action? onMediaEnded = null,
+        Action<string>? onStateChanged = null)
     {
         _monitor = monitor;
         _log = log;
         _onPrevTrack = onPrevTrack;
         _onNextTrack = onNextTrack;
+        _onStopRequested = onStopRequested;
+        _onMediaEnded = onMediaEnded;
+        _onStateChanged = onStateChanged;
         InitializeComponent();
 
         MonitorLabelText.Text = $"💻 {monitor.Label}  •  Dvojklik nebo F11 = celá obrazovka";
@@ -102,6 +115,11 @@ public partial class LocalMonitorWindow : Window
 
     public async Task PlayMediaAsync(string url, string title, string mime, string? subtitleUrl)
     {
+        _lastUrl = url;
+        _lastTitle = title;
+        _lastMime = mime;
+        _lastSubtitleUrl = subtitleUrl;
+
         TitleText.Text = string.IsNullOrWhiteSpace(title) ? "Přehrávání" : title;
         Title = $"StickCast – {TitleText.Text}";
 
@@ -131,7 +149,7 @@ public partial class LocalMonitorWindow : Window
             PhotoView.Source = bmp;
             PhotoView.Visibility = Visibility.Visible;
             _duration = TimeSpan.Zero;
-            SetState("PLAYING");
+            SetState("PLAYING", notifyHost: true);
             UpdateTimelineUi(TimeSpan.Zero, TimeSpan.Zero);
             return;
         }
@@ -140,41 +158,44 @@ public partial class LocalMonitorWindow : Window
         PhotoView.Source = null;
         Player.Visibility = Visibility.Visible;
         _duration = TimeSpan.Zero;
-        SetState("TRANSITIONING");
+        SetState("TRANSITIONING", notifyHost: false);
         UpdateTimelineUi(TimeSpan.Zero, TimeSpan.Zero);
 
         Player.Stop();
         Player.Source = new Uri(url, UriKind.Absolute);
         Player.Play();
-        SetState("PLAYING");
+        SetState("PLAYING", notifyHost: true);
         _uiTimer.Start();
     }
 
-    public void PausePlayback()
+    public void PausePlayback(bool notifyHost = false)
     {
         if (PhotoView.Visibility == Visibility.Visible) return;
         Player.Pause();
-        SetState("PAUSED_PLAYBACK");
+        SetState("PAUSED_PLAYBACK", notifyHost);
     }
 
-    public void ResumePlayback()
+    public void ResumePlayback(bool notifyHost = false)
     {
         if (PhotoView.Visibility == Visibility.Visible) return;
+        if (_state == "STOPPED" && !string.IsNullOrEmpty(_lastUrl))
+        {
+            if (Player.Source == null)
+                Player.Source = new Uri(_lastUrl, UriKind.Absolute);
+            Player.Position = TimeSpan.Zero;
+        }
         Player.Play();
-        SetState("PLAYING");
+        SetState("PLAYING", notifyHost);
+        _uiTimer.Start();
     }
 
-    public void StopPlayback()
+    public void StopPlayback(bool notifyHost = false)
     {
         _uiTimer.Stop();
         Player.Stop();
-        Player.Source = null;
-        PhotoView.Source = null;
-        PhotoView.Visibility = Visibility.Collapsed;
         SubtitleBorder.Visibility = Visibility.Collapsed;
-        _duration = TimeSpan.Zero;
-        SetState("STOPPED");
-        UpdateTimelineUi(TimeSpan.Zero, TimeSpan.Zero);
+        SetState("STOPPED", notifyHost);
+        UpdateTimelineUi(TimeSpan.Zero, _duration);
     }
 
     public void SeekPlayback(TimeSpan pos)
@@ -208,7 +229,7 @@ public partial class LocalMonitorWindow : Window
         Close();
     }
 
-    private void SetState(string state)
+    private void SetState(string state, bool notifyHost)
     {
         _state = state;
         PlayPauseButton.Content = state == "PLAYING" ? "⏸ Pauza" : "▶ Přehrát";
@@ -219,6 +240,8 @@ public partial class LocalMonitorWindow : Window
             "TRANSITIONING" => "⏳ načítá…",
             _ => "⏹ zastaveno",
         };
+        if (notifyHost)
+            _onStateChanged?.Invoke(state);
     }
 
     private void OnUiTimerTick()
@@ -318,7 +341,7 @@ public partial class LocalMonitorWindow : Window
     private void Player_MediaOpened(object sender, RoutedEventArgs e)
     {
         _duration = Player.NaturalDuration.HasTimeSpan ? Player.NaturalDuration.TimeSpan : TimeSpan.Zero;
-        SetState("PLAYING");
+        SetState("PLAYING", notifyHost: true);
         UpdateTimelineUi(Player.Position, _duration);
     }
 
@@ -326,14 +349,15 @@ public partial class LocalMonitorWindow : Window
     {
         _uiTimer.Stop();
         SubtitleBorder.Visibility = Visibility.Collapsed;
-        SetState("STOPPED");
+        SetState("STOPPED", notifyHost: false);
+        _onMediaEnded?.Invoke();
     }
 
     private void Player_MediaFailed(object? sender, ExceptionRoutedEventArgs e)
     {
         _uiTimer.Stop();
         SubtitleBorder.Visibility = Visibility.Collapsed;
-        SetState("STOPPED");
+        SetState("STOPPED", notifyHost: true);
         _log?.Invoke($"Chyba lokálního přehrávače: {e.ErrorException?.Message}");
     }
 
@@ -341,19 +365,40 @@ public partial class LocalMonitorWindow : Window
 
     private void PlayPause_Click(object sender, RoutedEventArgs e)
     {
-        if (_state == "PLAYING") PausePlayback();
-        else ResumePlayback();
+        if (_state == "PLAYING") PausePlayback(notifyHost: true);
+        else ResumePlayback(notifyHost: true);
     }
 
-    private void Stop_Click(object sender, RoutedEventArgs e) => StopPlayback();
+    private void Stop_Click(object sender, RoutedEventArgs e)
+    {
+        StopPlayback(notifyHost: false);
+        _onStopRequested?.Invoke();
+    }
 
     private void SeekBack_Click(object sender, RoutedEventArgs e) => SeekRelative(-10);
 
     private void SeekForward_Click(object sender, RoutedEventArgs e) => SeekRelative(10);
 
-    private void PrevTrack_Click(object sender, RoutedEventArgs e) => _onPrevTrack?.Invoke();
+    private void PrevTrack_Click(object sender, RoutedEventArgs e)
+    {
+        PrepareForTrackSwitch("⏳ načítám předchozí…");
+        _onPrevTrack?.Invoke();
+    }
 
-    private void NextTrack_Click(object sender, RoutedEventArgs e) => _onNextTrack?.Invoke();
+    private void NextTrack_Click(object sender, RoutedEventArgs e)
+    {
+        PrepareForTrackSwitch("⏳ načítám další…");
+        _onNextTrack?.Invoke();
+    }
+
+    private void PrepareForTrackSwitch(string badgeText)
+    {
+        _uiTimer.Stop();
+        try { Player.Stop(); } catch { }
+        SubtitleBorder.Visibility = Visibility.Collapsed;
+        _state = "TRANSITIONING";
+        StateBadgeText.Text = badgeText;
+    }
 
     private void Mute_Click(object sender, RoutedEventArgs e) => IsMuted = !IsMuted;
 
@@ -462,7 +507,8 @@ public partial class LocalMonitorWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e)
     {
-        StopPlayback();
+        StopPlayback(notifyHost: false);
+        _onStopRequested?.Invoke();
         Hide();
     }
 
@@ -488,8 +534,8 @@ public partial class LocalMonitorWindow : Window
                 e.Handled = true;
                 break;
             case Key.Space:
-                if (_state == "PLAYING") PausePlayback();
-                else ResumePlayback();
+                if (_state == "PLAYING") PausePlayback(notifyHost: true);
+                else ResumePlayback(notifyHost: true);
                 e.Handled = true;
                 break;
             case Key.Left:
@@ -519,12 +565,14 @@ public partial class LocalMonitorWindow : Window
             case Key.N:
             case Key.PageDown:
             case Key.MediaNextTrack:
+                PrepareForTrackSwitch("⏳ načítám další…");
                 _onNextTrack?.Invoke();
                 e.Handled = true;
                 break;
             case Key.P:
             case Key.PageUp:
             case Key.MediaPreviousTrack:
+                PrepareForTrackSwitch("⏳ načítám předchozí…");
                 _onPrevTrack?.Invoke();
                 e.Handled = true;
                 break;
@@ -536,7 +584,8 @@ public partial class LocalMonitorWindow : Window
         if (!_allowClose)
         {
             e.Cancel = true;
-            StopPlayback();
+            StopPlayback(notifyHost: false);
+            _onStopRequested?.Invoke();
             Hide();
         }
     }
@@ -547,6 +596,9 @@ public sealed class LocalMonitorHost : ILocalMediaHost, IDisposable
     private readonly Action<string>? _log;
     private readonly Action? _onPrevTrack;
     private readonly Action? _onNextTrack;
+    private readonly Action? _onStopRequested;
+    private readonly Action? _onMediaEnded;
+    private readonly Action<string>? _onStateChanged;
     private MonitorChoice _monitor;
     private LocalMonitorWindow? _window;
     private int _volume = 80;
@@ -556,12 +608,18 @@ public sealed class LocalMonitorHost : ILocalMediaHost, IDisposable
         MonitorChoice monitor,
         Action<string>? log = null,
         Action? onPrevTrack = null,
-        Action? onNextTrack = null)
+        Action? onNextTrack = null,
+        Action? onStopRequested = null,
+        Action? onMediaEnded = null,
+        Action<string>? onStateChanged = null)
     {
         _monitor = monitor;
         _log = log;
         _onPrevTrack = onPrevTrack;
         _onNextTrack = onNextTrack;
+        _onStopRequested = onStopRequested;
+        _onMediaEnded = onMediaEnded;
+        _onStateChanged = onStateChanged;
     }
 
     internal void UpdateMonitor(MonitorChoice monitor)
@@ -574,7 +632,14 @@ public sealed class LocalMonitorHost : ILocalMediaHost, IDisposable
     {
         if (_window == null)
         {
-            _window = new LocalMonitorWindow(_monitor, _log, _onPrevTrack, _onNextTrack)
+            _window = new LocalMonitorWindow(
+                _monitor,
+                _log,
+                _onPrevTrack,
+                _onNextTrack,
+                _onStopRequested,
+                _onMediaEnded,
+                _onStateChanged)
             {
                 VolumePercent = _volume,
                 IsMuted = _muted,
@@ -593,13 +658,13 @@ public sealed class LocalMonitorHost : ILocalMediaHost, IDisposable
     }
 
     public Task ResumeAsync() =>
-        Application.Current.Dispatcher.InvokeAsync(() => _window?.ResumePlayback()).Task;
+        Application.Current.Dispatcher.InvokeAsync(() => _window?.ResumePlayback(notifyHost: false)).Task;
 
     public Task PauseAsync() =>
-        Application.Current.Dispatcher.InvokeAsync(() => _window?.PausePlayback()).Task;
+        Application.Current.Dispatcher.InvokeAsync(() => _window?.PausePlayback(notifyHost: false)).Task;
 
     public Task StopAsync() =>
-        Application.Current.Dispatcher.InvokeAsync(() => _window?.StopPlayback()).Task;
+        Application.Current.Dispatcher.InvokeAsync(() => _window?.StopPlayback(notifyHost: false)).Task;
 
     public Task SeekAsync(TimeSpan pos) =>
         Application.Current.Dispatcher.InvokeAsync(() => _window?.SeekPlayback(pos)).Task;
