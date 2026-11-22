@@ -44,6 +44,9 @@ public partial class MainWindow : Window
     private string _lastState = "";
     private string _ytLastQuery = "";
     private int _ytPageIndex;
+    private bool _ytLastIsMusic;
+    private bool _playingFromYtSearch;
+    private int _currentYtIndex = -1;
     private DateTime _ignoreStateUntil = DateTime.MinValue;
     private DateTime _ignoreSeekUntil = DateTime.MinValue;
     private TimeSpan _lastPosition = TimeSpan.Zero;
@@ -84,6 +87,7 @@ public partial class MainWindow : Window
         AdbConnectEndpointBox.Text = _settings.LastAdbEndpoint;
         SelectComboByTag(RepeatCombo, _settings.RepeatMode, 0);
         SelectComboByTag(SlideshowCombo, _settings.SlideshowSeconds.ToString(), 0);
+        SelectComboByTag(YtAutoPlayCombo, _settings.YtAutoPlayNext ? "true" : "false", 0);
 
         _volumeFromDevice = true;
         VolumeSlider.Value = _settings.Volume;
@@ -222,6 +226,15 @@ public partial class MainWindow : Window
     private void BurnSubtitlesCheck_Changed(object sender, RoutedEventArgs e)
     {
         if (_uiReady) _settings.BurnSubtitles = BurnSubtitlesCheck.IsChecked == true;
+    }
+
+    private void YtAutoPlayCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_uiReady && YtAutoPlayCombo.SelectedItem is ComboBoxItem item && item.Tag is string tag)
+        {
+            _settings.YtAutoPlayNext = tag.Equals("true", StringComparison.OrdinalIgnoreCase);
+            _settings.Save();
+        }
     }
 
     private void RepeatCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

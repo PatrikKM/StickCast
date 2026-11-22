@@ -53,6 +53,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="UrlBox" KeyDown="UrlBox_KeyDown"/>
                             <Button Grid.Column="1" Content="▶ Přehrát na TV" Click="PlayUrl_Click"/>
@@ -63,15 +64,27 @@
                             <Button Grid.Column="4" Content="⭐ Do oblíbených" Style="{StaticResource Secondary}"
                                     Click="AddFavoriteFromBox_Click" ToolTip="Uložit aktuální nebo vybraný odkaz do oblíbených"/>
                             <Button Grid.Column="5" Content="🔍 Hledat na YouTube" Style="{StaticResource Secondary}" Click="YtSearch_Click"/>
+                            <Button Grid.Column="6" Content="🎵 Hledat na YT Music" Style="{StaticResource Secondary}"
+                                    Click="YtMusicSearch_Click" ToolTip="Vyhledat skladby na YouTube Music"/>
                         </Grid>
                         <WrapPanel DockPanel.Dock="Top" Margin="4,4,4,0">
                             <CheckBox x:Name="AutoCzechSubtitlesCheck" Content="💬 Automatické české titulky (normální i A.I.)"
-                                      IsChecked="True" VerticalAlignment="Center" Margin="0,0,16,0"
+                                      IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0"
                                       Checked="AutoCzechSubtitlesCheck_Changed" Unchecked="AutoCzechSubtitlesCheck_Changed"
                                       ToolTip="Automaticky najde nebo A.I. přeloží české titulky pro YouTube i lokální videa"/>
-                            <CheckBox x:Name="BurnSubtitlesCheck" Content="🔥 Vypálit žluté titulky do obrazu (ffmpeg – vždy dobře čitelné)"
-                                      IsChecked="True" VerticalAlignment="Center"
+                            <CheckBox x:Name="BurnSubtitlesCheck" Content="🔥 Vypálit žluté titulky do obrazu (ffmpeg – vždy čitelné)"
+                                      IsChecked="True" VerticalAlignment="Center" Margin="0,0,16,0"
                                       Checked="BurnSubtitlesCheck_Changed" Unchecked="BurnSubtitlesCheck_Changed"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="▶ Auto přehrávání další skladby:" VerticalAlignment="Center" Margin="0,0,6,0"
+                                           Foreground="#FF9824" FontWeight="SemiBold"/>
+                                <ComboBox x:Name="YtAutoPlayCombo" Width="74" Padding="6,3" VerticalAlignment="Center"
+                                          SelectionChanged="YtAutoPlayCombo_SelectionChanged"
+                                          ToolTip="Automaticky přejde na další vyhledanou skladbu/video po dohrání">
+                                    <ComboBoxItem Content="Ano" Tag="true"/>
+                                    <ComboBoxItem Content="Ne" Tag="false"/>
+                                </ComboBox>
+                            </StackPanel>
                         </WrapPanel>
                         <DockPanel x:Name="YtResultsPanel" DockPanel.Dock="Top" Visibility="Collapsed" Margin="0,8,0,0" MaxHeight="230">
                             <DockPanel DockPanel.Dock="Top" Margin="4,0,4,4">
@@ -528,9 +541,10 @@
                                     • <Bold>Ruční připojení přes IP:</Bold> Pokud router blokuje vyhledávání, zadej IP adresu TV nebo sticku do pole <Italic>nebo IP</Italic> a klikni na <Bold>Připojit</Bold>.
                                 </TextBlock>
 
-                                <TextBlock Style="{StaticResource H}" Text="2. 🌐 URL / stream, YouTube, Historie a Oblíbené"/>
+                                <TextBlock Style="{StaticResource H}" Text="2. 🌐 URL / stream, YouTube &amp; YouTube Music, Historie a Oblíbené"/>
                                 <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,10">
-                                    • <Bold>🔍 Hledat na YouTube (stránkování po 10):</Bold> Zadej hledaný výraz a klikni na <Bold>🔍 Hledat na YouTube</Bold>. Zobrazí se prvních 10 videí a tlačítky <Bold>◀ Předchozí</Bold> / <Bold>Další ▶</Bold> můžeš procházet další desítky výsledků.<LineBreak/>
+                                    • <Bold>🔍 Hledat na YouTube &amp; 🎵 Hledat na YT Music (stránkování po 10):</Bold> Zadej hledaný výraz a klikni na <Bold>🔍 Hledat na YouTube</Bold> nebo <Bold>🎵 Hledat na YT Music</Bold>. Zobrazí se prvních 10 skladeb/videí a tlačítky <Bold>◀ Předchozí</Bold> / <Bold>Další ▶</Bold> můžeš procházet další desítky výsledků.<LineBreak/>
+                                    • <Bold>▶ Auto přehrávání další skladby (Ano / Ne):</Bold> Pokud je nastaveno <Bold>Ano</Bold>, po skončení přehrávané skladby nebo videa z výsledků hledání aplikace automaticky přejde na další vyhledanou skladbu (včetně automatického načtení další desítky výsledků).<LineBreak/>
                                     • <Bold>Lokální DLNA Proxy pro TV Samsung:</Bold> YouTube streamy se automaticky směrují přes lokální DLNA HTTP Range proxy server se správnými hlavičkami, aby se na TV Samsung spolehlivě spustily.<LineBreak/>
                                     • <Bold>🕓 Historie a ⭐ Oblíbené:</Bold> Každé přehrané video se automaticky uloží do <Bold>Historie</Bold>. Tlačítkem <Bold>⭐ Do oblíbených</Bold> (nebo pravým tlačítkem myši) si uložíš videa natrvalo.<LineBreak/>
                                     • <Bold>📋 Zkopírovat URL &amp; Vložit a přehrát:</Bold> Jedním kliknutím zkopíruješ odkaz vybraného videa do schránky nebo okamžitě přehraješ odkaz ze schránky.

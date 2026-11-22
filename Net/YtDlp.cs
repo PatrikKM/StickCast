@@ -310,7 +310,8 @@ internal static class YtDlp
         string query,
         int maxResults = 10,
         CancellationToken ct = default,
-        int offset = 0)
+        int offset = 0,
+        bool youtubeMusic = false)
     {
         if (string.IsNullOrWhiteSpace(exe))
             throw new ArgumentException("Cesta k yt-dlp.exe je prázdná.", nameof(exe));
@@ -332,14 +333,22 @@ internal static class YtDlp
         psi.ArgumentList.Add("--dump-json");
         psi.ArgumentList.Add("--flat-playlist");
         psi.ArgumentList.Add("--no-warnings");
-        if (start > 1)
+        if (youtubeMusic || start > 1)
         {
             psi.ArgumentList.Add("--playlist-start");
             psi.ArgumentList.Add(start.ToString(System.Globalization.CultureInfo.InvariantCulture));
             psi.ArgumentList.Add("--playlist-end");
             psi.ArgumentList.Add(end.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
-        psi.ArgumentList.Add($"ytsearch{end}:{query.Trim()}");
+
+        if (youtubeMusic)
+        {
+            psi.ArgumentList.Add($"https://music.youtube.com/search?q={Uri.EscapeDataString(query.Trim())}");
+        }
+        else
+        {
+            psi.ArgumentList.Add($"ytsearch{end}:{query.Trim()}");
+        }
 
         using var p = Process.Start(psi)
             ?? throw new InvalidOperationException("Nepodařilo se spustit yt-dlp.exe.");
@@ -392,6 +401,11 @@ internal static class YtDlp
                 }
 
                 var channel = GetJsonString(root, "channel") ?? GetJsonString(root, "uploader") ?? "";
+                if (youtubeMusic)
+                {
+                    if (string.IsNullOrWhiteSpace(channel)) channel = "🎵 YouTube Music";
+                    if (string.IsNullOrWhiteSpace(duration)) duration = "skladba";
+                }
                 results.Add(new YtSearchResult(title.Length > 0 ? title : url, url, duration ?? "", channel));
             }
             catch (JsonException) { }

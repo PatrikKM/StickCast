@@ -253,15 +253,26 @@ public partial class MainWindow
             if (DateTime.UtcNow > _ignoreStateUntil)
             {
                 bool finished = _lastState == "PLAYING" && state is "STOPPED" or "NO_MEDIA_PRESENT";
-                if (finished && _playingFromPlaylist && !_userStopped && AutoNextCheck.IsChecked == true)
+                if (finished && !_userStopped)
                 {
-                    int next = GetNextPlaylistIndex(manual: false);
-                    if (next >= 0)
+                    if (_playingFromPlaylist && AutoNextCheck.IsChecked == true)
                     {
-                        Log("Konec souboru → další v playlistu");
+                        int next = GetNextPlaylistIndex(manual: false);
+                        if (next >= 0)
+                        {
+                            Log("Konec souboru → další v playlistu");
+                            _lastState = "";
+                            _ignoreStateUntil = DateTime.UtcNow.AddSeconds(5);
+                            await PlayFileAsync(next);
+                            return;
+                        }
+                    }
+                    else if (_playingFromYtSearch && _settings.YtAutoPlayNext && _ytResults.Count > 0)
+                    {
+                        Log("Konec skladby/videa → automaticky další vyhledaná položka");
                         _lastState = "";
                         _ignoreStateUntil = DateTime.UtcNow.AddSeconds(5);
-                        await PlayFileAsync(next);
+                        await PlayNextYtResultAsync();
                         return;
                     }
                 }

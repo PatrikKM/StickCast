@@ -11,8 +11,9 @@
 - **Lokální monitor notebooku / PC jako cílové zařízení (`💻 Tento počítač – Monitor 1…`):** Aplikace funguje i **zcela bez připojené TV** (např. na cestách na notebooku). Všechny připojené monitory se automaticky objeví v horním seznamu **Zařízení** a přehrávají videa, YouTube streamy, titulky, IPTV i fotky ve vestavěném přehrávači s podporou celé obrazovky (`F11` nebo dvojklik).
 - **Ruční připojení přes IP:** Možnost zadat IP adresu přijímače napřímo, pokud router blokuje UDP multicast.
 
-### 2. 🌐 YouTube vyhledávání, URL streamy, Historie a Oblíbené
-- **Vyhledávání na YouTube s posuvným stránkováním:** Vyhledá 10 výsledků na stránku s tlačítky **`◀ Předchozí`** a **`Další ▶`** (s lokální mezipamětí stránek pro okamžitý návrat zpět).
+### 2. 🌐 YouTube & YouTube Music vyhledávání, Auto přehrávání, Historie a Oblíbené
+- **Vyhledávání na YouTube (`🔍 Hledat na YouTube`) i YouTube Music (`🎵 Hledat na YT Music`) s posuvným stránkováním:** Vyhledá 10 výsledků na stránku s tlačítky **`◀ Předchozí`** a **`Další ▶`** (s lokální mezipamětí stránek pro okamžitý návrat zpět).
+- **▶ Auto přehrávání další skladby (`Ano / Ne`):** Při zapnuté volbě `Ano` aplikace po skončení skladby nebo videa automaticky přejde na další vyhledanou položku v seznamu (a po dohrání 10. skladby automaticky načte a spustí další desítku výsledků). Mezi vyhledanými skladbami lze přecházet i tlačítky `⏮` / `⏭`.
 - **Kompatibilita s TV Samsung i HDMI sticky:** Preferuje progresivní HTTP/HTTPS MP4 streamy a směruje je přes **lokální DLNA HTTP Range proxy** (`/p/{id}/media.mp4`) s plnými DLNA hlavičkami (`contentFeatures.dlna.org`, `transferMode.dlna.org`, `CaptionInfo.sec`) a automatickým `ffmpeg` MPEG-TS fallbackem.
 - **🕓 Historie a ⭐ Oblíbené:** Přehledné podzáložky s názvem videa, URL a časem přehrání, změnou pořadí, přímým přehráním dvojklikem a kontextovým menu.
 - **📋 Zkopírovat URL & Vložit a přehrát:** Rychlá práce se schránkou jedním kliknutím na všech seznamech (YouTube, Historie, Oblíbené, Playlist).

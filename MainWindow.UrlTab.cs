@@ -35,19 +35,22 @@ public partial class MainWindow
     }
 
     private async void YtSearch_Click(object sender, RoutedEventArgs e) =>
-        await SafeAsync(() => SearchYouTubeAsync(UrlBox.Text.Trim(), pageIndex: 0));
+        await SafeAsync(() => SearchYouTubeAsync(UrlBox.Text.Trim(), pageIndex: 0, isMusic: false));
+
+    private async void YtMusicSearch_Click(object sender, RoutedEventArgs e) =>
+        await SafeAsync(() => SearchYouTubeAsync(UrlBox.Text.Trim(), pageIndex: 0, isMusic: true));
 
     private async void YtPrevPage_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_ytLastQuery) || _ytPageIndex <= 0) return;
-        await SafeAsync(() => SearchYouTubeAsync(_ytLastQuery, _ytPageIndex - 1));
+        await SafeAsync(() => SearchYouTubeAsync(_ytLastQuery, _ytPageIndex - 1, _ytLastIsMusic));
     }
 
     private async void YtNextPage_Click(object sender, RoutedEventArgs e)
     {
         var q = !string.IsNullOrWhiteSpace(_ytLastQuery) ? _ytLastQuery : UrlBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(q)) return;
-        await SafeAsync(() => SearchYouTubeAsync(q, _ytPageIndex + 1));
+        await SafeAsync(() => SearchYouTubeAsync(q, _ytPageIndex + 1, _ytLastIsMusic));
     }
 
     private void CloseYtResults_Click(object sender, RoutedEventArgs e)
@@ -56,14 +59,17 @@ public partial class MainWindow
         _ytResults.Clear();
         _ytPageCache.Clear();
         _ytPageIndex = 0;
+        _playingFromYtSearch = false;
+        _currentYtIndex = -1;
     }
 
     private async void YtResultsList_DoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (YtResultsList.SelectedItem is YtSearchResult res)
         {
+            int idx = YtResultsList.SelectedIndex;
             UrlBox.Text = res.Url;
-            await SafeAsync(() => PlayUrlAsync(res.Url));
+            await SafeAsync(() => PlayUrlAsync(res.Url, ytIndex: idx));
         }
     }
 
@@ -77,8 +83,9 @@ public partial class MainWindow
     {
         if (YtResultsList.SelectedItem is YtSearchResult res)
         {
+            int idx = YtResultsList.SelectedIndex;
             UrlBox.Text = res.Url;
-            await SafeAsync(() => PlayUrlAsync(res.Url));
+            await SafeAsync(() => PlayUrlAsync(res.Url, ytIndex: idx));
         }
     }
 
@@ -331,9 +338,9 @@ public partial class MainWindow
         ?? _history.FirstOrDefault(x => x.Url.Equals(url, StringComparison.OrdinalIgnoreCase))?.Title
         ?? ShortTitle(url);
 
-    // ------------------------------------------------------------------ YouTube Search & PlayUrlAsync
+    // ------------------------------------------------------------------ YouTube / YouTube Music Search & PlayUrlAsync
 
-    private async Task SearchYouTubeAsync(string query, int pageIndex = 0)
+    private async Task SearchYouTubeAsync(string query, int pageIndex = 0, bool? isMusic = null)
     {
         var cleanQuery = query.Trim();
         if (string.IsNullOrWhiteSpace(cleanQuery))
@@ -346,22 +353,25 @@ public partial class MainWindow
         if (ytdlp == null)
         {
             MessageBox.Show(this,
-                "Pro vyhledávání na YouTube je potřeba program yt-dlp.exe.\n\n" +
+                "Pro vyhledávání na YouTube / YouTube Music je potřeba program yt-dlp.exe.\n\n" +
                 "Můžeš ho stáhnout jedním klikem v záložce ⚙ Stick → „⬇ Stáhnout yt-dlp.exe“.",
                 "Potřeba yt-dlp", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
 
+        bool music = isMusic ?? _ytLastIsMusic;
         pageIndex = Math.Max(0, pageIndex);
-        if (!cleanQuery.Equals(_ytLastQuery, StringComparison.OrdinalIgnoreCase))
+        if (!cleanQuery.Equals(_ytLastQuery, StringComparison.OrdinalIgnoreCase) || music != _ytLastIsMusic)
         {
             _ytLastQuery = cleanQuery;
+            _ytLastIsMusic = music;
             _ytPageCache.Clear();
             pageIndex = 0;
         }
 
         int startNum = pageIndex * YtPageSize + 1;
         int endNum = startNum + YtPageSize - 1;
+        string sourceLabel = music ? "YouTube Music" : "YouTube";
 
         YtPrevPageButton.IsEnabled = false;
         YtNextPageButton.IsEnabled = false;
@@ -369,15 +379,21 @@ public partial class MainWindow
         {
             if (!_ytPageCache.TryGetValue(pageIndex, out var results))
             {
-                SetStatus($"Hledám na YouTube ({startNum}–{endNum}): {cleanQuery}…");
-                results = await YtDlp.SearchAsync(ytdlp, cleanQuery, maxResults: YtPageSize, _cts.Token, offset: pageIndex * YtPageSize);
+                SetStatus($"Hledám na {sourceLabel} ({startNum}–{endNum}): {cleanQuery}…");
+                results = await YtDlp.SearchAsync(
+                    ytdlp,
+                    cleanQuery,
+                    maxResults: YtPageSize,
+                    _cts.Token,
+                    offset: pageIndex * YtPageSize,
+                    youtubeMusic: music);
                 if (results.Count > 0)
                     _ytPageCache[pageIndex] = results;
             }
 
             if (results.Count == 0 && pageIndex > 0)
             {
-                SetStatus("Další výsledky na YouTube už nebyly nalezeny.");
+                SetStatus($"Další výsledky na {sourceLabel} už nebyly nalezeny.");
                 return;
             }
 
@@ -386,11 +402,12 @@ public partial class MainWindow
             foreach (var item in results) _ytResults.Add(item);
 
             int shownEnd = startNum + Math.Max(0, _ytResults.Count - 1);
-            YtResultsTitleText.Text = $"Výsledky z YouTube ({startNum}–{shownEnd}, dvojklik = přehrát):";
+            var prefix = music ? "🎵 Výsledky z YouTube Music" : "Výsledky z YouTube";
+            YtResultsTitleText.Text = $"{prefix} ({startNum}–{shownEnd}, dvojklik = přehrát):";
             YtResultsPanel.Visibility = _ytResults.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             SetStatus(_ytResults.Count > 0
-                ? $"Zobrazeny výsledky {startNum}–{shownEnd} pro „{cleanQuery}“"
-                : "Na YouTube nebylo nic nalezeno.");
+                ? $"Zobrazeny výsledky {sourceLabel} {startNum}–{shownEnd} pro „{cleanQuery}“"
+                : $"Na {sourceLabel} nebylo nic nalezeno.");
         }
         finally
         {
@@ -399,7 +416,63 @@ public partial class MainWindow
         }
     }
 
-    private async Task PlayUrlAsync(string input)
+    private async Task PlayNextYtResultAsync()
+    {
+        if (_ytResults.Count == 0) return;
+
+        int nextIdx = _currentYtIndex + 1;
+        if (nextIdx >= 0 && nextIdx < _ytResults.Count)
+        {
+            var next = _ytResults[nextIdx];
+            YtResultsList.SelectedIndex = nextIdx;
+            UrlBox.Text = next.Url;
+            await PlayUrlAsync(next.Url, ytIndex: nextIdx);
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_ytLastQuery))
+        {
+            int prevPage = _ytPageIndex;
+            await SearchYouTubeAsync(_ytLastQuery, _ytPageIndex + 1, _ytLastIsMusic);
+            if (_ytPageIndex > prevPage && _ytResults.Count > 0)
+            {
+                var first = _ytResults[0];
+                YtResultsList.SelectedIndex = 0;
+                UrlBox.Text = first.Url;
+                await PlayUrlAsync(first.Url, ytIndex: 0);
+            }
+        }
+    }
+
+    private async Task PlayPrevYtResultAsync()
+    {
+        if (_ytResults.Count == 0) return;
+
+        int prevIdx = _currentYtIndex - 1;
+        if (prevIdx >= 0 && prevIdx < _ytResults.Count)
+        {
+            var prev = _ytResults[prevIdx];
+            YtResultsList.SelectedIndex = prevIdx;
+            UrlBox.Text = prev.Url;
+            await PlayUrlAsync(prev.Url, ytIndex: prevIdx);
+            return;
+        }
+
+        if (_ytPageIndex > 0 && !string.IsNullOrWhiteSpace(_ytLastQuery))
+        {
+            await SearchYouTubeAsync(_ytLastQuery, _ytPageIndex - 1, _ytLastIsMusic);
+            if (_ytResults.Count > 0)
+            {
+                int lastIdx = _ytResults.Count - 1;
+                var last = _ytResults[lastIdx];
+                YtResultsList.SelectedIndex = lastIdx;
+                UrlBox.Text = last.Url;
+                await PlayUrlAsync(last.Url, ytIndex: lastIdx);
+            }
+        }
+    }
+
+    private async Task PlayUrlAsync(string input, int? ytIndex = null)
     {
         var url = input.Trim();
         if (url.Length == 0) return;
@@ -474,6 +547,22 @@ public partial class MainWindow
 
                 BeginPlayback();
                 _playingFromPlaylist = false;
+                int matchedYtIdx = ytIndex ?? -1;
+                if (matchedYtIdx < 0)
+                {
+                    for (int i = 0; i < _ytResults.Count; i++)
+                    {
+                        if (_ytResults[i].Url.Equals(url, StringComparison.OrdinalIgnoreCase))
+                        {
+                            matchedYtIdx = i;
+                            break;
+                        }
+                    }
+                }
+                _playingFromYtSearch = matchedYtIdx >= 0;
+                _currentYtIndex = matchedYtIdx;
+                if (matchedYtIdx >= 0 && YtResultsList.SelectedIndex != matchedYtIdx)
+                    YtResultsList.SelectedIndex = matchedYtIdx;
                 SetStatus(r.IsLocalMonitor ? "Otevírám na monitoru PC…" : "Posílám na TV…");
 
                 var detectedMime = resolvedByYtDlp && !playUrl.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)

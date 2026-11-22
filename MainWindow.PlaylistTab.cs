@@ -268,6 +268,8 @@ public partial class MainWindow
 
                 BeginPlayback();
                 _playingFromPlaylist = true;
+                _playingFromYtSearch = false;
+                _currentYtIndex = -1;
                 _currentFileIndex = index;
                 FilesList.SelectedIndex = index;
                 SetStatus(r.IsLocalMonitor ? "Otevírám na monitoru PC…" : "Posílám na TV…");
@@ -350,6 +352,11 @@ public partial class MainWindow
 
     private async Task NextAsync()
     {
+        if (_playingFromYtSearch && _ytResults.Count > 0)
+        {
+            await PlayNextYtResultAsync();
+            return;
+        }
         if (_files.Count == 0) return;
         var next = GetNextPlaylistIndex(manual: true);
         if (next >= 0) await PlayFileAsync(next);
@@ -357,6 +364,11 @@ public partial class MainWindow
 
     private async Task PrevAsync()
     {
+        if (_playingFromYtSearch && _ytResults.Count > 0)
+        {
+            await PlayPrevYtResultAsync();
+            return;
+        }
         if (_files.Count == 0) return;
         int prev = _currentFileIndex <= 0 ? _files.Count - 1 : _currentFileIndex - 1;
         await PlayFileAsync(prev);
