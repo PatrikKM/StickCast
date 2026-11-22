@@ -1,0 +1,565 @@
+<Window x:Class="StickCast.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="StickCast – ovladač pro WiFi Display stick" Height="720" Width="980" MinWidth="680" MinHeight="520"
+        Background="#F3F4F8" FontFamily="Segoe UI" FontSize="13" AllowDrop="True"
+        DragOver="Window_DragOver" Drop="Window_Drop" PreviewKeyDown="Window_PreviewKeyDown"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ========== Device bar ========== -->
+        <Border Grid.Row="0" Style="{StaticResource Card}" Margin="8,8,8,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="140"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="📺 Zařízení:" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,0"/>
+                <ComboBox x:Name="DevicesCombo" Grid.Column="1" Margin="4" Padding="6,5" VerticalContentAlignment="Center"
+                          SelectionChanged="DevicesCombo_SelectionChanged"/>
+                <Button x:Name="SearchButton" Grid.Column="2" Content="🔍 Hledat" Click="Search_Click"/>
+                <TextBlock Grid.Column="3" Text="nebo IP:" VerticalAlignment="Center" Margin="12,0,4,0" Foreground="#6B7280"/>
+                <TextBox x:Name="ManualIpBox" Grid.Column="4" ToolTip="Např. 192.168.1.50 (IP sticku ve tvé síti)"/>
+                <Button Grid.Column="5" Content="Připojit" Style="{StaticResource Secondary}" Click="ManualConnect_Click"/>
+            </Grid>
+        </Border>
+
+        <!-- ========== Tabs ========== -->
+        <TabControl x:Name="MainTabs" Grid.Row="1" Margin="8" Padding="0" Background="Transparent" BorderThickness="0">
+            <TabItem Header="  🌐 URL / stream  ">
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Přehrát odkaz nebo hledat na YouTube"/>
+                        <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Foreground="#6B7280" Margin="0,0,0,8">
+                            Vlož přímý odkaz na video/hudbu (.mp4, .mp3, .m3u/.m3u8 IPTV…), nebo napiš hledaný výraz pro YouTube.
+                            Pro YouTube je potřeba program yt-dlp.exe (lze stáhnout v záložce ⚙ Stick).
+                        </TextBlock>
+                        <Grid DockPanel.Dock="Top">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBox x:Name="UrlBox" KeyDown="UrlBox_KeyDown"/>
+                            <Button Grid.Column="1" Content="▶ Přehrát na TV" Click="PlayUrl_Click"/>
+                            <Button Grid.Column="2" Content="📋 Vložit a přehrát" Style="{StaticResource Secondary}"
+                                    Click="PasteAndPlay_Click" ToolTip="Vložit odkaz ze schránky a rovnou přehrát"/>
+                            <Button Grid.Column="3" Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}"
+                                    Click="CopyUrl_Click" ToolTip="Zkopírovat aktuální nebo vybranou URL do schránky"/>
+                            <Button Grid.Column="4" Content="⭐ Do oblíbených" Style="{StaticResource Secondary}"
+                                    Click="AddFavoriteFromBox_Click" ToolTip="Uložit aktuální nebo vybraný odkaz do oblíbených"/>
+                            <Button Grid.Column="5" Content="🔍 Hledat na YouTube" Style="{StaticResource Secondary}" Click="YtSearch_Click"/>
+                        </Grid>
+                        <WrapPanel DockPanel.Dock="Top" Margin="4,4,4,0">
+                            <CheckBox x:Name="AutoCzechSubtitlesCheck" Content="💬 Automatické české titulky (normální i A.I.)"
+                                      IsChecked="True" VerticalAlignment="Center" Margin="0,0,16,0"
+                                      Checked="AutoCzechSubtitlesCheck_Changed" Unchecked="AutoCzechSubtitlesCheck_Changed"
+                                      ToolTip="Automaticky najde nebo A.I. přeloží české titulky pro YouTube i lokální videa"/>
+                            <CheckBox x:Name="BurnSubtitlesCheck" Content="🔥 Vypálit žluté titulky do obrazu (ffmpeg – vždy dobře čitelné)"
+                                      IsChecked="True" VerticalAlignment="Center"
+                                      Checked="BurnSubtitlesCheck_Changed" Unchecked="BurnSubtitlesCheck_Changed"/>
+                        </WrapPanel>
+                        <DockPanel x:Name="YtResultsPanel" DockPanel.Dock="Top" Visibility="Collapsed" Margin="0,8,0,0" MaxHeight="230">
+                            <DockPanel DockPanel.Dock="Top" Margin="4,0,4,4">
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button x:Name="YtPrevPageButton" Content="◀ Předchozí" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
+                                            Click="YtPrevPage_Click" ToolTip="Předchozích 10 výsledků"/>
+                                    <Button x:Name="YtNextPageButton" Content="Další ▶" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,8,0"
+                                            Click="YtNextPage_Click" ToolTip="Načíst dalších 10 výsledků"/>
+                                    <Button Content="⭐ Do oblíbených" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
+                                            Click="AddYtToFavorites_Click"/>
+                                    <Button Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
+                                            Click="CopyYtUrl_Click"/>
+                                    <Button Content="✕ Zavřít" Style="{StaticResource Secondary}" Padding="8,3" Margin="0"
+                                            Click="CloseYtResults_Click"/>
+                                </StackPanel>
+                                <TextBlock x:Name="YtResultsTitleText" Text="Výsledky z YouTube (1–10):" Foreground="#374151" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <ListBox x:Name="YtResultsList" Margin="4" MouseDoubleClick="YtResultsList_DoubleClick"
+                                     SelectionChanged="YtResultsList_SelectionChanged" BorderBrush="#E5E7EB">
+                                <ListBox.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedYt_Click"/>
+                                        <MenuItem Header="⭐ Přidat do oblíbených" Click="AddYtToFavorites_Click"/>
+                                        <MenuItem Header="📋 Zkopírovat URL" Click="CopyYtUrl_Click"/>
+                                    </ContextMenu>
+                                </ListBox.ContextMenu>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Margin="2">
+                                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Foreground="#6B7280" FontSize="12">
+                                                <Run Text="{Binding Channel, Mode=OneWay}"/>
+                                                <Run Text="  •  "/>
+                                                <Run Text="{Binding Duration, Mode=OneWay}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
+
+                        <TabControl x:Name="UrlSubTabs" Margin="0,8,0,0" Padding="0" Background="Transparent" BorderThickness="0">
+                            <TabItem Header="  🕓 Historie  ">
+                                <DockPanel Margin="0,6,0,0">
+                                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                                        <Button Content="▶ Přehrát vybrané" Click="PlaySelectedHistory_Click"/>
+                                        <Button Content="⭐ Do oblíbených" Style="{StaticResource Secondary}" Click="AddHistoryToFavorites_Click"/>
+                                        <Button Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}" Click="CopyHistoryUrl_Click"/>
+                                        <Button Content="Odebrat" Style="{StaticResource Secondary}" Click="RemoveHistory_Click"/>
+                                        <Button Content="Vyčistit historii" Style="{StaticResource Secondary}" Click="ClearHistory_Click"/>
+                                    </WrapPanel>
+                                    <Grid Margin="4">
+                                        <ListBox x:Name="HistoryList" MouseDoubleClick="HistoryList_DoubleClick"
+                                                 SelectionChanged="HistoryList_SelectionChanged" KeyDown="HistoryList_KeyDown"
+                                                 BorderBrush="#E5E7EB">
+                                            <ListBox.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedHistory_Click"/>
+                                                    <MenuItem Header="⭐ Přidat do oblíbených" Click="AddHistoryToFavorites_Click"/>
+                                                    <MenuItem Header="📋 Zkopírovat URL" Click="CopyHistoryUrl_Click"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="🗑 Odebrat z historie" Click="RemoveHistory_Click"/>
+                                                </ContextMenu>
+                                            </ListBox.ContextMenu>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="2">
+                                                        <TextBlock FontWeight="SemiBold" TextTrimming="CharacterEllipsis">
+                                                            <Run Text="{Binding Title, Mode=OneWay}"/>
+                                                            <Run Text="   " />
+                                                            <Run Text="{Binding Timestamp, Mode=OneWay}" Foreground="#9CA3AF" FontWeight="Normal" FontSize="11"/>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Url, Mode=OneWay}" Foreground="#6B7280" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <TextBlock Text="Historie přehrávání je zatím prázdná.&#x0a;Vlož URL nebo vyhledej video výše a klikni na „▶ Přehrát na TV“.">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyHint}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ElementName=HistoryList, Path=HasItems}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </DockPanel>
+                            </TabItem>
+
+                            <TabItem Header="  ⭐ Oblíbené  ">
+                                <DockPanel Margin="0,6,0,0">
+                                    <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,4">
+                                        <Button Content="▶ Přehrát vybrané" Click="PlaySelectedFavorite_Click"/>
+                                        <Button Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}" Click="CopyFavoriteUrl_Click"/>
+                                        <Button Content="⬆ Nahoru" Style="{StaticResource Secondary}" Padding="10,6" Click="MoveFavoriteUp_Click"/>
+                                        <Button Content="⬇ Dolů" Style="{StaticResource Secondary}" Padding="10,6" Click="MoveFavoriteDown_Click"/>
+                                        <Button Content="Odebrat" Style="{StaticResource Secondary}" Click="RemoveFavorite_Click"/>
+                                        <Button Content="Vyčistit oblíbené" Style="{StaticResource Secondary}" Click="ClearFavorites_Click"/>
+                                    </WrapPanel>
+                                    <Grid Margin="4">
+                                        <ListBox x:Name="FavoritesList" MouseDoubleClick="FavoritesList_DoubleClick"
+                                                 SelectionChanged="FavoritesList_SelectionChanged" KeyDown="FavoritesList_KeyDown"
+                                                 BorderBrush="#E5E7EB">
+                                            <ListBox.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedFavorite_Click"/>
+                                                    <MenuItem Header="📋 Zkopírovat URL" Click="CopyFavoriteUrl_Click"/>
+                                                    <Separator/>
+                                                    <MenuItem Header="🗑 Odebrat z oblíbených" Click="RemoveFavorite_Click"/>
+                                                </ContextMenu>
+                                            </ListBox.ContextMenu>
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <StackPanel Margin="2">
+                                                        <TextBlock Text="{Binding Title, Mode=OneWay}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Url, Mode=OneWay}" Foreground="#6B7280" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                        <TextBlock Text="Seznam oblíbených je prázdný.&#x0a;Klikni na „⭐ Do oblíbených“ u odkazu, výsledku z YouTube nebo položky v historii.">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyHint}">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding ElementName=FavoritesList, Path=HasItems}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </DockPanel>
+                            </TabItem>
+                        </TabControl>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+
+            <TabItem Header="  📁 Soubory z PC  ">
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Top" Style="{StaticResource H}" Text="Playlist lokálních souborů a IPTV"/>
+                        <WrapPanel DockPanel.Dock="Top">
+                            <Button Content="➕ Přidat soubory" Click="AddFiles_Click"/>
+                            <Button Content="▶ Přehrát vybraný" Click="PlaySelectedFile_Click"/>
+                            <Button Content="⬆ Nahoru" Style="{StaticResource Secondary}" Padding="10,6" Click="MoveUp_Click"/>
+                            <Button Content="⬇ Dolů" Style="{StaticResource Secondary}" Padding="10,6" Click="MoveDown_Click"/>
+                            <Button Content="Odebrat" Style="{StaticResource Secondary}" Click="RemoveFile_Click"/>
+                            <Button Content="Vyčistit" Style="{StaticResource Secondary}" Click="ClearFiles_Click"/>
+                            <Button Content="⭐ Do oblíbených" Style="{StaticResource Secondary}" Click="AddFileToFavorites_Click"/>
+                            <Button Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}" Click="CopyFileUrl_Click"/>
+                            <Button Content="💾 Uložit M3U" Style="{StaticResource Secondary}" Click="SaveM3u_Click"/>
+                        </WrapPanel>
+                        <WrapPanel DockPanel.Dock="Top" Margin="4,4,4,0">
+                            <CheckBox x:Name="AutoNextCheck" Content="Automaticky další" IsChecked="True"
+                                      VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock Text="Opakování:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#374151"/>
+                            <ComboBox x:Name="RepeatCombo" VerticalAlignment="Center" Width="116" Padding="6,4" Margin="0,0,12,0"
+                                      SelectionChanged="RepeatCombo_SelectionChanged">
+                                <ComboBoxItem Content="Neopakovat" Tag="none"/>
+                                <ComboBoxItem Content="Opakovat vše" Tag="all"/>
+                                <ComboBoxItem Content="Opakovat jeden" Tag="one"/>
+                            </ComboBox>
+                            <CheckBox x:Name="ShuffleCheck" Content="🔀 Náhodně" VerticalAlignment="Center" Margin="0,0,12,0"
+                                      Checked="ShuffleCheck_Changed" Unchecked="ShuffleCheck_Changed"/>
+                            <TextBlock Text="Slideshow fotek:" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="#374151"/>
+                            <ComboBox x:Name="SlideshowCombo" VerticalAlignment="Center" Width="88" Padding="6,4" Margin="0,0,12,0"
+                                      SelectionChanged="SlideshowCombo_SelectionChanged">
+                                <ComboBoxItem Content="Vypnuto" Tag="0"/>
+                                <ComboBoxItem Content="5 s" Tag="5"/>
+                                <ComboBoxItem Content="10 s" Tag="10"/>
+                            </ComboBox>
+                            <CheckBox x:Name="TranscodeCheck" Content="Kompatibilní režim (překódovat přes ffmpeg + vypálit titulky)"
+                                      VerticalAlignment="Center" Checked="TranscodeCheck_Changed" Unchecked="TranscodeCheck_Changed"/>
+                        </WrapPanel>
+                        <Grid Margin="4,8,4,4">
+                            <ListBox x:Name="FilesList" MouseDoubleClick="FilesList_DoubleClick" KeyDown="FilesList_KeyDown"
+                                     BorderBrush="#E5E7EB" SelectionMode="Extended">
+                                <ListBox.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedFile_Click"/>
+                                        <MenuItem Header="⭐ Přidat do oblíbených" Click="AddFileToFavorites_Click"/>
+                                        <MenuItem Header="📋 Zkopírovat URL" Click="CopyFileUrl_Click"/>
+                                        <Separator/>
+                                        <MenuItem Header="🗑 Odebrat" Click="RemoveFile_Click"/>
+                                    </ContextMenu>
+                                </ListBox.ContextMenu>
+                            </ListBox>
+                            <TextBlock Text="Playlist je prázdný.&#x0a;Přetáhni sem soubory, složky nebo .m3u playlist, případně klikni na „➕ Přidat soubory“.">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyHint}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ElementName=FilesList, Path=HasItems}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </DockPanel>
+                </Border>
+            </TabItem>
+
+            <TabItem Header="  🖥 Zrcadlení PC  ">
+                <Border Style="{StaticResource Card}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource H}" Text="Zrcadlení obrazovky PC (Miracast / DLNA)"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="#374151">
+                                <Bold>Nativní Miracast (nejnižší zpoždění):</Bold> klikni na „Spustit zrcadlení (Win+K)“ a vyber „WifiDisplay 28C228F2“.
+                                Stick musí být na TV na úvodní obrazovce.
+                            </TextBlock>
+                            <WrapPanel Margin="0,8,0,0">
+                                <Button Content="📡 Spustit zrcadlení (Win+K)" Click="Miracast_Click"/>
+                                <Button Content="Nastavení projekce" Style="{StaticResource Secondary}" Click="ProjectSettings_Click"/>
+                                <Button Content="Přidat bezdrátový displej" Style="{StaticResource Secondary}" Click="AddDisplay_Click"/>
+                                <Button Content="⛔ Ukončit zrcadlení" Style="{StaticResource Secondary}" Click="Miracast_Click"
+                                        ToolTip="Otevře stejný panel – tam klikni na Odpojit"/>
+                            </WrapPanel>
+
+                            <Separator Margin="0,14"/>
+
+                            <TextBlock Style="{StaticResource H}" Text="DLNA stream obrazovky (přes ffmpeg)"/>
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="220"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="72"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Text="Monitor:" VerticalAlignment="Center" Margin="0,4,8,4"/>
+                                <ComboBox x:Name="MonitorCombo" Grid.Column="1" Margin="0,4,12,4" Padding="6,4"/>
+                                <TextBlock Grid.Column="2" Text="Rozlišení:" VerticalAlignment="Center" Margin="0,4,8,4"/>
+                                <ComboBox x:Name="ScreenResCombo" Grid.Column="3" Margin="0,4,12,4" Padding="6,4" SelectedIndex="2">
+                                    <ComboBoxItem Content="Originál" Tag="0"/>
+                                    <ComboBoxItem Content="1080p" Tag="1920"/>
+                                    <ComboBoxItem Content="720p" Tag="1280"/>
+                                </ComboBox>
+                                <TextBlock Grid.Column="4" Text="FPS:" VerticalAlignment="Center" Margin="0,4,8,4"/>
+                                <ComboBox x:Name="ScreenFpsCombo" Grid.Column="5" Margin="0,4,0,4" Padding="6,4" SelectedIndex="1">
+                                    <ComboBoxItem Content="15" Tag="15"/>
+                                    <ComboBoxItem Content="25" Tag="25"/>
+                                    <ComboBoxItem Content="30" Tag="30"/>
+                                </ComboBox>
+
+                                <TextBlock Grid.Row="1" Text="Zvuk:" VerticalAlignment="Center" Margin="0,6,8,4"/>
+                                <DockPanel Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5" Margin="0,6,0,4">
+                                    <Button DockPanel.Dock="Right" Content="🔄 Obnovit audio" Style="{StaticResource Secondary}"
+                                            Padding="10,4" Margin="8,0,0,0" Click="RefreshAudioDevices_Click"/>
+                                    <ComboBox x:Name="AudioDeviceCombo" Padding="6,4"/>
+                                </DockPanel>
+                            </Grid>
+                            <WrapPanel>
+                                <Button x:Name="ScreenStreamButton" Content="📺 Streamovat obrazovku přes DLNA (ffmpeg)" Click="ScreenStream_Click"/>
+                            </WrapPanel>
+                            <TextBlock x:Name="ScreenStreamStatus" Margin="4,8,0,0" Foreground="#6B7280" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <TabItem Header="  📱 Telefon  ">
+                <Border Style="{StaticResource Card}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource H}" Text="Streamování z telefonu (Xiaomi 15T Pro &amp; Motorola Edge 50 Fusion)"/>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="#111827" Margin="0,0,0,10">
+                                <Bold>1. Xiaomi 15T Pro (HyperOS – primární):</Bold><LineBreak/>
+                                • <Bold>Celá obrazovka (Miracast):</Bold> Stáhni Ovládací centrum → dlaždice <Bold>Odeslat (Cast)</Bold>
+                                (nebo <Italic>Nastavení → Další možnosti připojení → Odeslat</Italic>). Zapni Wi-Fi i Polohu; HyperOS umí i
+                                <Italic>Odeslat s vypnutou obrazovkou</Italic> a skrytí oznámení.<LineBreak/>
+                                • <Bold>Videa a YouTube bez vybíjení mobilu (DLNA):</Bold> Připoj stick do domácí Wi-Fi (záložka ⚙ Stick)
+                                a v aplikaci <Bold>Web Video Cast</Bold> nebo <Bold>BubbleUPnP</Bold> vyber stick jako DLNA přijímač.
+                            </TextBlock>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="#111827" Margin="0,0,0,10">
+                                <Bold>2. Motorola Edge 50 Fusion (Hello UI – sekundární):</Bold><LineBreak/>
+                                • <Bold>Pozor:</Bold> Vestavěná dlaždice <Bold>Odeslat</Bold> a <Bold>Smart Connect</Bold> na Motorole hledají
+                                Google Cast / Ready For a noname Miracast stick pravděpodobně neuvidí.<LineBreak/>
+                                • <Bold>Řešení A (videa/fotky přes Wi-Fi):</Bold> Použij DLNA aplikaci (<Bold>Web Video Cast</Bold>,
+                                <Bold>BubbleUPnP</Bold>, <Bold>VLC</Bold>) se stickem připojeným do domácí Wi-Fi.<LineBreak/>
+                                • <Bold>Řešení B (celá obrazovka přes PC):</Bold> Připoj telefon přes <Bold>Bezdrátové ladění (Wi-Fi)</Bold>
+                                nebo USB kabel pomocí <Bold>scrcpy</Bold> níže a obrazovku PC pošli na TV přes Miracast (Win+K) nebo DLNA stream obrazovky.
+                            </TextBlock>
+
+                            <Separator Margin="0,4,0,10"/>
+
+                            <TextBlock FontWeight="SemiBold" Text="Zrcadlení telefonu přes PC (Wi-Fi ADB + scrcpy)" Margin="0,0,0,4"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="#6B7280" FontSize="12" Margin="0,0,0,8">
+                                V telefonu zapni: Nastavení → Možnosti pro vývojáře → <Bold>Bezdrátové ladění</Bold> (klepni na text).
+                                Při prvním připojení na Wi-Fi spáruj kód, potom se připojuješ jen přes hlavní IP:port.
+                                (Na Xiaomi pro ovládání myší zapni i „Ladění USB (Nastavení zabezpečení)“.)
+                            </TextBlock>
+
+                            <Grid Margin="0,2,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="175"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="95"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Párovací IP:port:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBox x:Name="AdbPairEndpointBox" Grid.Column="1" Margin="0,0,8,0"
+                                         ToolTip="IP:port z obrazovky „Spárovat zařízení pomocí párovacího kódu“, např. 192.168.1.42:37123"/>
+                                <TextBlock Grid.Column="2" Text="Kód:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBox x:Name="AdbPairCodeBox" Grid.Column="3" Margin="0,0,8,0"
+                                         ToolTip="6místný párovací kód z telefonu"/>
+                                <Button Grid.Column="4" Content="🔗 Spárovat (Wi-Fi)" Style="{StaticResource Secondary}" Click="AdbPair_Click"/>
+                            </Grid>
+
+                            <Grid Margin="0,2,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="175"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Hlavní IP:port:" VerticalAlignment="Center" Margin="0,0,18,0"/>
+                                <TextBox x:Name="AdbConnectEndpointBox" Grid.Column="1" Margin="0,0,8,0"
+                                         ToolTip="Hlavní IP adresa a port nahoře v Bezdrátovém ladění, např. 192.168.1.42:41567"/>
+                                <Button Grid.Column="2" Content="📶 Připojit přes Wi-Fi" Style="{StaticResource Secondary}" Click="AdbConnect_Click"/>
+                                <Button Grid.Column="3" Content="📱 Zrcadlit telefon (scrcpy)" Click="Scrcpy_Click"/>
+                                <Button Grid.Column="4" Content="🔍 Připojené telefony" Style="{StaticResource Secondary}" Click="AdbDevices_Click"/>
+                            </Grid>
+
+                            <WrapPanel Margin="0,2,0,4">
+                                <CheckBox x:Name="ScrcpyWifiTuningCheck" Content="Stabilní Wi-Fi režim scrcpy (audio buffer 150 ms, 30 fps)"
+                                          IsChecked="True" Margin="4,4,14,4"/>
+                                <CheckBox x:Name="ScrcpyNoAudioCheck" Content="Bez zvuku v scrcpy (--no-audio)" Margin="4,4,14,4"/>
+                                <Button Content="🔌 Odpojit ADB (uvolnit Wi-Fi)" Style="{StaticResource Secondary}" Padding="10,4"
+                                        Click="AdbDisconnect_Click"
+                                        ToolTip="Ukončí bezdrátové ADB spojení s telefonem, aby nerušilo přímé zrcadlení z telefonu na TV"/>
+                            </WrapPanel>
+
+                            <TextBlock x:Name="AdbStatusText" Margin="4,4,0,10" Foreground="#374151" TextWrapping="Wrap"/>
+
+                            <TextBlock TextWrapping="Wrap" Foreground="#6B7280">
+                                <Bold>iPhone / iPad:</Bold> Ovládací centrum → „Zrcadlení obrazovky“ (AirPlay) → WifiDisplay.
+                            </TextBlock>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+
+            <TabItem Header="  ⚙ Stick  ">
+                <Border Style="{StaticResource Card}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource H}" Text="Připojení sticku, síť a nástroje"/>
+                            <TextBlock TextWrapping="Wrap" Foreground="#374151" Margin="0,0,0,8">
+                                1. Připoj PC ke sticku (výchozí hotspot <Bold>WifiDisplay 28C228F2</Bold>, heslo <Bold>12345678</Bold>).<LineBreak/>
+                                2. Otevři administraci (192.168.203.1) a v sekci „Internet“ připoj stick do domácí Wi-Fi.<LineBreak/>
+                                3. Připoj PC zpět do domácí Wi-Fi a klikni nahoře na „🔍 Hledat“.
+                            </TextBlock>
+
+                            <Grid Margin="0,4,0,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="180"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="Hotspot SSID:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBox x:Name="HotspotSsidBox" Grid.Column="1" Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="2" Text="Heslo:" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <TextBox x:Name="HotspotPassBox" Grid.Column="3" Margin="0,0,10,0"/>
+                                <Button Grid.Column="4" Content="📶 Připojit PC ke sticku" Style="{StaticResource Secondary}" Click="ConnectHotspot_Click"/>
+                            </Grid>
+                            <TextBlock x:Name="CurrentWifiText" Foreground="#6B7280" Margin="4,0,0,8" TextWrapping="Wrap"/>
+
+                            <WrapPanel Margin="0,2,0,4">
+                                <Button Content="🌐 Otevřít administraci (192.168.203.1)" Click="OpenAdmin_Click"/>
+                                <Button Content="🔍 Zkontrolovat stav sticku" Style="{StaticResource Secondary}" Click="ProbeStick_Click"/>
+                                <Button Content="Wi-Fi sítě ve Windows" Style="{StaticResource Secondary}" Click="WifiSettings_Click"/>
+                            </WrapPanel>
+                            <TextBlock x:Name="StickProbeText" Margin="4,4,0,8" Foreground="#374151" TextWrapping="Wrap"/>
+
+                            <Separator Margin="0,6,0,10"/>
+
+                            <TextBlock FontWeight="SemiBold" Text="Firewall a dostupnost mediálního serveru" Margin="0,0,0,4"/>
+                            <WrapPanel>
+                                <Button Content="🛡 Kontrola sítě a firewallu" Style="{StaticResource Secondary}" Click="CheckFirewall_Click"/>
+                                <Button Content="🔓 Povolit ve Firewallu" Style="{StaticResource Secondary}" Click="AllowFirewall_Click"/>
+                            </WrapPanel>
+                            <TextBlock x:Name="FirewallStatusText" Margin="4,4,0,8" Foreground="#374151" TextWrapping="Wrap"/>
+
+                            <Separator Margin="0,6,0,10"/>
+
+                            <TextBlock FontWeight="SemiBold" Text="Externí nástroje (yt-dlp.exe &amp; ffmpeg.exe)" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="ToolsStatusText" Margin="4,0,0,6" Foreground="#374151" TextWrapping="Wrap"/>
+                            <WrapPanel>
+                                <Button x:Name="DownloadYtDlpButton" Content="⬇ Stáhnout yt-dlp.exe" Style="{StaticResource Secondary}" Click="DownloadYtDlp_Click"/>
+                                <Button x:Name="DownloadFfmpegButton" Content="⬇ Stáhnout ffmpeg.exe" Style="{StaticResource Secondary}" Click="DownloadFfmpeg_Click"/>
+                                <Button x:Name="CancelDownloadButton" Content="Zrušit stahování" Style="{StaticResource Secondary}"
+                                        Visibility="Collapsed" Click="CancelDownload_Click"/>
+                            </WrapPanel>
+                            <StackPanel x:Name="ToolDownloadPanel" Visibility="Collapsed" Margin="4,6,4,0">
+                                <ProgressBar x:Name="ToolDownloadProgress" Height="14" Minimum="0" Maximum="100"/>
+                                <TextBlock x:Name="ToolDownloadStatus" Foreground="#6B7280" FontSize="12" Margin="0,3,0,0"/>
+                            </StackPanel>
+
+                            <Separator Margin="0,10"/>
+
+                            <CheckBox x:Name="MinimizeToTrayCheck" Content="Minimalizovat do oznamovací oblasti (tray) při zavření okna"
+                                      Margin="4,2,0,0" Checked="MinimizeToTrayCheck_Changed" Unchecked="MinimizeToTrayCheck_Changed"/>
+                            <TextBlock x:Name="DeviceInfoText" Margin="4,10,0,0" Foreground="#6B7280" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+        </TabControl>
+
+        <!-- ========== Playback bar ========== -->
+        <Border Grid.Row="2" Style="{StaticResource Card}" Margin="8,0,8,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="NowPlayingText" Text="Nic se nepřehrává" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="StateText" Grid.Column="1" Foreground="#6B7280" VerticalAlignment="Center"/>
+                </Grid>
+                <Grid Grid.Row="1" Margin="0,6,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="100"/>
+                        <ColumnDefinition Width="36"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="⏮" ToolTip="Předchozí soubor" Style="{StaticResource Secondary}" Click="Prev_Click"/>
+                        <Button Content="▶" ToolTip="Pokračovat (Mezerník)" Click="Resume_Click"/>
+                        <Button Content="⏸" ToolTip="Pauza (Mezerník)" Click="Pause_Click"/>
+                        <Button Content="⏹" ToolTip="Stop" Style="{StaticResource Secondary}" Click="Stop_Click"/>
+                        <Button Content="⏭" ToolTip="Další soubor" Style="{StaticResource Secondary}" Click="Next_Click"/>
+                    </StackPanel>
+                    <TextBlock x:Name="PosText" Grid.Column="1" Text="0:00:00" VerticalAlignment="Center" Margin="8,0"/>
+                    <Slider x:Name="PositionSlider" Grid.Column="2" VerticalAlignment="Center" Minimum="0" Maximum="1"
+                            IsMoveToPointEnabled="True"
+                            PreviewMouseLeftButtonDown="PositionSlider_MouseDown"
+                            PreviewMouseLeftButtonUp="PositionSlider_MouseUp"
+                            LostMouseCapture="PositionSlider_LostMouseCapture"
+                            ValueChanged="PositionSlider_ValueChanged"
+                            ToolTip="Posun (šipky ←/→ ±10 s)"/>
+                    <TextBlock x:Name="DurText" Grid.Column="3" Text="0:00:00" VerticalAlignment="Center" Margin="8,0"/>
+                    <Button x:Name="MuteButton" Grid.Column="4" Content="🔊" Style="{StaticResource Secondary}" Click="Mute_Click" ToolTip="Ztlumit"/>
+                    <Slider x:Name="VolumeSlider" Grid.Column="5" VerticalAlignment="Center" Minimum="0" Maximum="100"
+                            IsMoveToPointEnabled="True" ValueChanged="VolumeSlider_ValueChanged" ToolTip="Hlasitost sticku (+/-)"/>
+                    <TextBlock x:Name="VolumeText" Grid.Column="6" Text="30%" VerticalAlignment="Center" HorizontalAlignment="Right"
+                               Foreground="#6B7280" FontSize="12"/>
+                    <Button Grid.Column="7" Content="📌 Mini" Style="{StaticResource Secondary}" Padding="10,6" Margin="8,4,0,4"
+                            ToolTip="Otevřít plovoucí mini-ovladač" Click="MiniPlayer_Click"/>
+                </Grid>
+            </Grid>
+        </Border>
+
+        <!-- ========== Status / log ========== -->
+        <Expander Grid.Row="3" Margin="12,0,12,8">
+            <Expander.Header>
+                <TextBlock x:Name="StatusText" Text="Připraveno" Foreground="#374151"/>
+            </Expander.Header>
+            <TextBox x:Name="LogBox" Height="140" IsReadOnly="True" FontFamily="Consolas" FontSize="11"
+                     VerticalScrollBarVisibility="Auto" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto"/>
+        </Expander>
+    </Grid>
+</Window>

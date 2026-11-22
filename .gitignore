@@ -1,0 +1,55 @@
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Pp]ublish/
+_b/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+.vscode/
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Bundled third-party runtime binaries & tools
+scrcpy.exe
+adb.exe
+ffmpeg.exe
+ffplay.exe
+ffprobe.exe
+yt-dlp.exe
+AdbWinApi.dll
+AdbWinUsbApi.dll
+SDL2.dll
+SDL3.dll
+avcodec-*.dll
+avformat-*.dll
+avutil-*.dll
+swresample-*.dll
+swscale-*.dll
+libusb-*.dll
+scrcpy-server*
+
+# User settings, cache & temporary files
+settings.json
+settings.json.tmp
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp
+Thumbs.db
+.DS_Store

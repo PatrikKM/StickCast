@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>StickCast</AssemblyName>
+    <RootNamespace>StickCast</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>StickCast</Product>
+    <Description>Ovladač pro WiFi Display / EZMira / MiraScreen dongle (DLNA + Miracast)</Description>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="StickCast.Tests\**" />
+  </ItemGroup>
+
+</Project>
