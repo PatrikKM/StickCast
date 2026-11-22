@@ -19,7 +19,11 @@ public partial class MainWindow
             var id = (i + 1).ToString();
             if (!_localMonitorHosts.TryGetValue(id, out var host))
             {
-                host = new LocalMonitorHost(mon, s => Dispatcher.BeginInvoke(() => Log(s)));
+                host = new LocalMonitorHost(
+                    mon,
+                    s => Dispatcher.BeginInvoke(() => Log(s)),
+                    onPrevTrack: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(PrevAsync)),
+                    onNextTrack: () => Dispatcher.BeginInvoke(() => _ = SafeAsync(NextAsync)));
                 _localMonitorHosts[id] = host;
             }
             else

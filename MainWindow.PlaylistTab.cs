@@ -357,9 +357,32 @@ public partial class MainWindow
             await PlayNextYtResultAsync();
             return;
         }
-        if (_files.Count == 0) return;
-        var next = GetNextPlaylistIndex(manual: true);
-        if (next >= 0) await PlayFileAsync(next);
+        if (_playingFromPlaylist && _files.Count > 0)
+        {
+            var next = GetNextPlaylistIndex(manual: true);
+            if (next >= 0) await PlayFileAsync(next);
+            return;
+        }
+        if (UrlSubTabs.SelectedIndex == 1 && _favorites.Count > 0)
+        {
+            int idx = (FavoritesList.SelectedIndex + 1) % _favorites.Count;
+            FavoritesList.SelectedIndex = idx;
+            await PlayUrlAsync(_favorites[idx].Url);
+            return;
+        }
+        if (_history.Count > 1)
+        {
+            int idx = Math.Max(0, HistoryList.SelectedIndex) + 1;
+            if (idx >= _history.Count) idx = 0;
+            HistoryList.SelectedIndex = idx;
+            await PlayUrlAsync(_history[idx].Url);
+            return;
+        }
+        if (_files.Count > 0)
+        {
+            var next = GetNextPlaylistIndex(manual: true);
+            if (next >= 0) await PlayFileAsync(next);
+        }
     }
 
     private async Task PrevAsync()
@@ -369,9 +392,31 @@ public partial class MainWindow
             await PlayPrevYtResultAsync();
             return;
         }
-        if (_files.Count == 0) return;
-        int prev = _currentFileIndex <= 0 ? _files.Count - 1 : _currentFileIndex - 1;
-        await PlayFileAsync(prev);
+        if (_playingFromPlaylist && _files.Count > 0)
+        {
+            int prev = _currentFileIndex <= 0 ? _files.Count - 1 : _currentFileIndex - 1;
+            await PlayFileAsync(prev);
+            return;
+        }
+        if (UrlSubTabs.SelectedIndex == 1 && _favorites.Count > 0)
+        {
+            int idx = FavoritesList.SelectedIndex <= 0 ? _favorites.Count - 1 : FavoritesList.SelectedIndex - 1;
+            FavoritesList.SelectedIndex = idx;
+            await PlayUrlAsync(_favorites[idx].Url);
+            return;
+        }
+        if (_history.Count > 1)
+        {
+            int idx = HistoryList.SelectedIndex <= 0 ? _history.Count - 1 : HistoryList.SelectedIndex - 1;
+            HistoryList.SelectedIndex = idx;
+            await PlayUrlAsync(_history[idx].Url);
+            return;
+        }
+        if (_files.Count > 0)
+        {
+            int prev = _currentFileIndex <= 0 ? _files.Count - 1 : _currentFileIndex - 1;
+            await PlayFileAsync(prev);
+        }
     }
 
     private async void Next_Click(object sender, RoutedEventArgs e) => await SafeAsync(NextAsync);
