@@ -3,10 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="StickCast – Mini ovladač" Width="440" Height="124"
         Topmost="True" WindowStyle="ToolWindow" ResizeMode="NoResize" ShowInTaskbar="False"
-        Background="#F3F4F8" FontFamily="Segoe UI" FontSize="12"
+        Background="#1B1C1F" Foreground="#F3F4F6" FontFamily="Segoe UI" FontSize="12"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         WindowStartupLocation="CenterOwner">
-    <Border Style="{StaticResource Card}" Margin="6" Padding="10">
+    <Border Style="{StaticResource Card}" Margin="6" Padding="10" BorderBrush="#FF8800">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -17,9 +17,9 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="TitleText" Text="Nic se nepřehrává" FontWeight="SemiBold"
+                <TextBlock x:Name="TitleText" Text="Nic se nepřehrává" FontWeight="SemiBold" Foreground="#FF9824"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                <TextBlock x:Name="StateText" Grid.Column="1" Foreground="#6B7280" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StateText" Grid.Column="1" Foreground="#A1A7B3" Margin="8,0,0,0" VerticalAlignment="Center"/>
             </Grid>
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
@@ -37,7 +37,7 @@
                         Minimum="0" Maximum="100" IsMoveToPointEnabled="True"
                         ValueChanged="VolumeSlider_ValueChanged" ToolTip="Hlasitost"/>
                 <TextBlock x:Name="VolumeText" Grid.Column="2" Text="30%" Width="34" TextAlignment="Right"
-                           VerticalAlignment="Center" Foreground="#6B7280"/>
+                           VerticalAlignment="Center" Foreground="#FF9824" FontWeight="SemiBold"/>
             </Grid>
         </Grid>
     </Border>

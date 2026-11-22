@@ -13,25 +13,23 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- Top control strip -->
-        <Border x:Name="TopBar" Grid.Row="0" Background="#CC111827" Padding="12,8" BorderBrush="#374151" BorderThickness="0,0,0,1">
+        <!-- Top control strip (VLC Dark & Orange) -->
+        <Border x:Name="TopBar" Grid.Row="0" Background="#E61B1C1F" Padding="12,8" BorderBrush="#FF8800" BorderThickness="0,0,0,1.5">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                     <Button x:Name="FullscreenButton" Content="⛶ Celá obrazovka (F11)"
-                            Background="#2563EB" Foreground="White" BorderThickness="0"
-                            Padding="10,5" Margin="0,0,6,0" Cursor="Hand"
+                            Padding="10,5" Margin="0,0,6,0"
                             Click="Fullscreen_Click"/>
-                    <Button Content="✕ Zavřít"
-                            Background="#374151" Foreground="White" BorderThickness="0"
-                            Padding="10,5" Cursor="Hand"
+                    <Button Content="✕ Zavřít" Style="{StaticResource Secondary}"
+                            Padding="10,5"
                             Click="Close_Click"/>
                 </StackPanel>
                 <StackPanel Orientation="Vertical" VerticalAlignment="Center">
                     <TextBlock x:Name="TitleText" Text="StickCast – Přehrávač na monitoru PC"
-                               FontWeight="SemiBold" FontSize="14" Foreground="#FFFFFF"
+                               FontWeight="SemiBold" FontSize="14" Foreground="#FF9824"
                                TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="MonitorLabelText" Text="💻 Tento počítač"
-                               FontSize="11" Foreground="#9CA3AF"/>
+                               FontSize="11" Foreground="#A1A7B3"/>
                 </StackPanel>
             </DockPanel>
         </Border>

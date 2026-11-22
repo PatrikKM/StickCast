@@ -190,10 +190,10 @@ internal sealed class TrayIcon : IDisposable
                 }
                 else
                 {
-                    // #2563EB -> B=235, G=99, R=37
-                    xor[idx + 0] = 235;
-                    xor[idx + 1] = 99;
-                    xor[idx + 2] = 37;
+                    // VLC Traffic Cone Orange #FF8800 -> B=0, G=136, R=255
+                    xor[idx + 0] = 0;
+                    xor[idx + 1] = 136;
+                    xor[idx + 2] = 255;
                     xor[idx + 3] = 255;
                 }
             }
