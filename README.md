@@ -1,6 +1,18 @@
 # 📺 StickCast
 
-**StickCast** je moderní desktopová aplikace pro Windows (.NET 8, WPF / C#) sloužící jako univerzální ovladač a streamovací centrum pro **Smart TV (Samsung DLNA/UPnP)**, **WiFi Display / EZMira / MiraScreen HDMI dongly**, **lokální monitory notebooku či PC** a zrcadlení **Android telefonů** (Xiaomi HyperOS, Motorola Hello UI / Smart Connect).
+**StickCast** je moderní desktopová aplikace pro Windows (.NET 8, WPF / C# ve stylu VLC) sloužící jako univerzální ovladač a streamovací centrum pro **Smart TV (Samsung DLNA/UPnP)**, **WiFi Display / EZMira / MiraScreen HDMI dongly**, **lokální monitory notebooku či PC** a zrcadlení **Android telefonů** (Xiaomi HyperOS, Motorola Hello UI / Smart Connect).
+
+---
+
+## ⬇ Stažení spustitelného souboru (`StickCast.exe`)
+
+Připravený spustitelný soubor pro Windows 10 / 11 (64-bit) si můžeš stáhnout přímo z **GitHub Releases**:
+
+- 👉 **[📥 Stáhnout `StickCast.exe` (Samostatný spustitelný soubor – nevyžaduje instalaci .NET)](https://github.com/PatrikKM/StickCast/releases/latest/download/StickCast.exe)**
+- 👉 **[📥 Stáhnout `StickCast-Light-net8.exe` (Odlehčená verze ~420 KB pro PC s nainstalovaným .NET 8)](https://github.com/PatrikKM/StickCast/releases/latest/download/StickCast-Light-net8.exe)**
+- 🔗 **[Všechna vydání (GitHub Releases – v1.0.0)](https://github.com/PatrikKM/StickCast/releases/latest)**
+
+*(Externí nástroje `yt-dlp.exe` a `ffmpeg.exe` si aplikace umí stáhnout sama jedním kliknutím v záložce `⚙ Stick`.)*
 
 ---
 
