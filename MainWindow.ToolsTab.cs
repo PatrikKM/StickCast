@@ -378,4 +378,25 @@ public partial class MainWindow
     private void AddDisplay_Click(object sender, RoutedEventArgs e) => Open("ms-settings-connectabledevices:devicediscovery");
     private void OpenAdmin_Click(object sender, RoutedEventArgs e) => Open("http://192.168.203.1");
     private void WifiSettings_Click(object sender, RoutedEventArgs e) => Open("ms-availablenetworks:");
+    private void OpenGitHubReadme_Click(object sender, RoutedEventArgs e) => Open("https://github.com/PatrikKM/StickCast#readme");
+
+    private void CopyReadme_Click(object sender, RoutedEventArgs e)
+    {
+        const string readmeSummary =
+            "StickCast – Univerzální ovladač pro Smart TV Samsung (DLNA), WiFi Display sticky, monitory PC a Android telefony\r\n" +
+            "GitHub: https://github.com/PatrikKM/StickCast\r\n\r\n" +
+            "1. Zařízení: Automaticky hledá DLNA TV/sticky v síti a zároveň nabízí všechny lokální monitory notebooku/PC (funguje i bez TV).\r\n" +
+            "2. URL / YouTube: Vyhledávání po 10 výsledcích (Předchozí / Další), lokální DLNA proxy pro TV Samsung, Historie, Oblíbené a kopírování URL.\r\n" +
+            "3. Titulky: Automatické 4stupňové české titulky (normální i A.I.) + vždy vynucené žluté, tučné a vysoce čitelné titulky.\r\n" +
+            "4. Soubory, Obrazovka PC a Telefon: Drag & Drop playlisty, Miracast (Win+K), ffmpeg DLNA stream obrazovky a Wireless ADB + scrcpy.";
+        try
+        {
+            Clipboard.SetDataObject(readmeSummary);
+            SetStatus("Text nápovědy (Readme) zkopírován do schránky");
+        }
+        catch (Exception ex)
+        {
+            SetStatus("Nelze zkopírovat do schránky: " + ex.Message);
+        }
+    }
 }

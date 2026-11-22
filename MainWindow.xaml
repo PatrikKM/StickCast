@@ -497,6 +497,69 @@
                     </ScrollViewer>
                 </Border>
             </TabItem>
+
+            <TabItem Header="  ❓ Readme  ">
+                <Border Style="{StaticResource Card}">
+                    <DockPanel>
+                        <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Content="🌐 Otevřít GitHub" Click="OpenGitHubReadme_Click"
+                                        ToolTip="Otevře repozitář https://github.com/PatrikKM/StickCast v prohlížeči"/>
+                                <Button Content="📋 Zkopírovat návod" Style="{StaticResource Secondary}" Click="CopyReadme_Click"
+                                        ToolTip="Zkopíruje kompletní text návodu do schránky"/>
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource H}" Text="❓ StickCast – Nápověda a přehled funkcí (Readme)" VerticalAlignment="Center" Margin="0"/>
+                        </DockPanel>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="2,0,6,4">
+                                <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,10">
+                                    <Bold Foreground="#FF9824">StickCast</Bold> je univerzální ovladač a streamovací centrum ve stylu VLC pro
+                                    <Bold>Smart TV Samsung (DLNA/UPnP)</Bold>, <Bold>WiFi Display / EZMira / MiraScreen HDMI sticky</Bold>,
+                                    <Bold>lokální monitory notebooku či PC</Bold> a zrcadlení <Bold>Android telefonů</Bold>.
+                                </TextBlock>
+
+                                <Separator Margin="0,4,0,10"/>
+
+                                <TextBlock Style="{StaticResource H}" Text="1. 📺 Výběr cílového zařízení (TV, Stick i Monitor notebooku/PC)"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,10">
+                                    • <Bold>Automatická detekce v síti (🔍 Hledat):</Bold> Vyhledá všechny DLNA/UPnP televizory a HDMI sticky v domácí Wi-Fi.<LineBreak/>
+                                    • <Bold>💻 Tento počítač – Monitor notebooku / PC:</Bold> Aplikace funguje i <Bold>zcela bez připojené TV</Bold>. Každý monitor notebooku nebo PC se automaticky objeví v horním seznamu <Bold>Zařízení</Bold>. Při přehrávání otevře vestavěné okno přehrávače se žlutými titulky, přetáčením a režimem celé obrazovky (<Bold>F11</Bold> nebo <Bold>dvojklik do videa</Bold>).<LineBreak/>
+                                    • <Bold>Ruční připojení přes IP:</Bold> Pokud router blokuje vyhledávání, zadej IP adresu TV nebo sticku do pole <Italic>nebo IP</Italic> a klikni na <Bold>Připojit</Bold>.
+                                </TextBlock>
+
+                                <TextBlock Style="{StaticResource H}" Text="2. 🌐 URL / stream, YouTube, Historie a Oblíbené"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,10">
+                                    • <Bold>🔍 Hledat na YouTube (stránkování po 10):</Bold> Zadej hledaný výraz a klikni na <Bold>🔍 Hledat na YouTube</Bold>. Zobrazí se prvních 10 videí a tlačítky <Bold>◀ Předchozí</Bold> / <Bold>Další ▶</Bold> můžeš procházet další desítky výsledků.<LineBreak/>
+                                    • <Bold>Lokální DLNA Proxy pro TV Samsung:</Bold> YouTube streamy se automaticky směrují přes lokální DLNA HTTP Range proxy server se správnými hlavičkami, aby se na TV Samsung spolehlivě spustily.<LineBreak/>
+                                    • <Bold>🕓 Historie a ⭐ Oblíbené:</Bold> Každé přehrané video se automaticky uloží do <Bold>Historie</Bold>. Tlačítkem <Bold>⭐ Do oblíbených</Bold> (nebo pravým tlačítkem myši) si uložíš videa natrvalo.<LineBreak/>
+                                    • <Bold>📋 Zkopírovat URL &amp; Vložit a přehrát:</Bold> Jedním kliknutím zkopíruješ odkaz vybraného videa do schránky nebo okamžitě přehraješ odkaz ze schránky.
+                                </TextBlock>
+
+                                <TextBlock Style="{StaticResource H}" Text="3. 💬 Automatické české titulky (normální i A.I.) + Vždy žluté čitelné titulky"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,10">
+                                    • <Bold>4stupňové získávání českých titulků:</Bold> Aplikace automaticky hledá: 1) ruční české titulky, 2) YouTube A.I. české titulky, 3) YouTube A.I. překlad do češtiny (<Italic>tlang=cs</Italic>), 4) záložní A.I. překlad anglických/původních titulků do češtiny.<LineBreak/>
+                                    • <Bold>🔥 Vynucené žluté čitelné titulky:</Bold> Titulky jsou vždy vykresleny <Bold Foreground="#FFFF00">velkým tučným jasně žlutým písmem s výrazným černým obrysem a stínem</Bold> (při streamu na TV/stick vypálené přímo do obrazu přes <Italic>ffmpeg</Italic>, na monitoru PC v kontrastním žlutém překryvu).
+                                </TextBlock>
+
+                                <TextBlock Style="{StaticResource H}" Text="4. 📁 Soubory z PC, 🖥 Zrcadlení PC a 📱 Telefon"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,10">
+                                    • <Bold>📁 Soubory z PC:</Bold> Přetáhni myší (Drag &amp; Drop) videa, hudbu, fotky nebo <Italic>.m3u</Italic> IPTV playlisty. Automaticky připojí lokální <Italic>.srt/.vtt</Italic> titulky se stejným názvem.<LineBreak/>
+                                    • <Bold>🖥 Zrcadlení PC:</Bold> Nativní Miracast (<Bold>Win+K</Bold>) nebo živý DLNA stream vybraného monitoru přes <Italic>ffmpeg</Italic> se synchronizací zvuku.<LineBreak/>
+                                    • <Bold>📱 Telefon (Xiaomi 15T Pro &amp; Motorola Edge 50 Fusion):</Bold> Spárování a připojení přes <Bold>Bezdrátové ladění (Wi-Fi ADB)</Bold> a zrcadlení přes <Bold>scrcpy</Bold>. Při přímém Miracastu z telefonu na TV použij tlačítko <Bold>🔌 Odpojit ADB (uvolnit Wi-Fi)</Bold>.
+                                </TextBlock>
+
+                                <TextBlock Style="{StaticResource H}" Text="5. ⌨ Klávesové zkratky a 📌 Mini-ovladač"/>
+                                <TextBlock TextWrapping="Wrap" Foreground="#E5E7EB" Margin="0,0,0,4">
+                                    • <Bold>Mezerník:</Bold> Pauza / Pokračovat   • <Bold>Šipky ← / →:</Bold> Posun o ±10 s   • <Bold>+ / -:</Bold> Hlasitost ±5 %<LineBreak/>
+                                    • <Bold>Globální zkratky (fungují i na pozadí):</Bold> <Italic>Ctrl+Alt+Mezerník</Italic> (Play/Pauza), <Italic>Ctrl+Alt+←/→</Italic> (Předchozí/Další)<LineBreak/>
+                                    • <Bold>Lokální monitor PC:</Bold> <Italic>F11</Italic> nebo <Italic>dvojklik myší</Italic> = celá obrazovka, <Italic>Esc</Italic> = návrat do okna.
+                                </TextBlock>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </TabItem>
         </TabControl>
 
         <!-- ========== Playback bar (VLC Orange Border Accent) ========== -->
