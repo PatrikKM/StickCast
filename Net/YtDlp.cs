@@ -24,7 +24,7 @@ internal static class YtDlp
     private const string FormatSelector =
         "best[protocol=https][ext=mp4][vcodec^=avc1][acodec!=none]/" +
         "best[protocol=http][ext=mp4][vcodec^=avc1][acodec!=none]/" +
-        "18/best[ext=mp4][vcodec^=avc1][acodec!=none]/best[ext=mp4][acodec!=none]/best[acodec!=none]";
+        "18/best[ext=mp4][vcodec^=avc1][acodec!=none]/best[ext=mp4][acodec!=none]/best[acodec!=none]/best";
 
     public static string? Find() => ToolDownloader.FindTool("yt-dlp.exe");
 
@@ -55,6 +55,73 @@ internal static class YtDlp
         if (string.IsNullOrWhiteSpace(url))
             throw new ArgumentException("URL adresa je prázdná.", nameof(url));
 
+        // Build candidate URLs: if music.youtube.com/watch?v=ID fails or lacks direct MP4 streams,
+        // fallback to www.youtube.com/watch?v=ID which exposes the full progressive format list.
+        var candidateUrls = new List<string> { url.Trim() };
+        if (url.Contains("music.youtube.com/watch", StringComparison.OrdinalIgnoreCase))
+        {
+            var stdUrl = url.Replace("music.youtube.com/", "www.youtube.com/", StringComparison.OrdinalIgnoreCase);
+            if (!candidateUrls.Contains(stdUrl, StringComparer.OrdinalIgnoreCase))
+                candidateUrls.Add(stdUrl);
+        }
+
+        string? lastError = null;
+        foreach (var candidateUrl in candidateUrls)
+        {
+            foreach (var fmt in new string?[] { FormatSelector, "best[acodec!=none]/best", null })
+            {
+                var (exitCode, stdout, stderr) = await RunDumpSingleJsonAsync(exe, candidateUrl, fmt, ct);
+                if (exitCode != 0 || string.IsNullOrWhiteSpace(stdout))
+                {
+                    var err = stderr.Trim();
+                    lastError = err.Length > 0 ? err : $"ukončeno s kódem {exitCode}";
+                    continue;
+                }
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(stdout);
+                    var root = doc.RootElement;
+                    string? mediaUrl = ExtractDirectMediaUrl(root);
+
+                    if (string.IsNullOrWhiteSpace(mediaUrl) &&
+                        TryExtractFirstEntryWatchUrl(root, out var firstWatchUrl) &&
+                        !string.Equals(firstWatchUrl, candidateUrl, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return await ResolveWithSubtitlesAsync(exe, firstWatchUrl!, autoCzechSubtitles, ct);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(mediaUrl))
+                    {
+                        lastError = "yt-dlp nevrátil přímou URL streamu.";
+                        continue;
+                    }
+
+                    var title = GetJsonString(root, "title");
+                    string? subPath = null;
+                    string? subSource = null;
+
+                    if (autoCzechSubtitles)
+                        (subPath, subSource) = await TryFetchCzechSubtitlesAsync(root, candidateUrl, ct);
+
+                    return new YtResolvedMedia(mediaUrl, title, subPath, subSource);
+                }
+                catch (JsonException ex)
+                {
+                    lastError = "Neplatná JSON odpověď z yt-dlp: " + ex.Message;
+                }
+            }
+        }
+
+        throw new InvalidOperationException("yt-dlp nedokázal získat odkaz: " + (lastError ?? "neznámá chyba"));
+    }
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunDumpSingleJsonAsync(
+        string exe,
+        string targetUrl,
+        string? formatSelector,
+        CancellationToken ct)
+    {
         var psi = new ProcessStartInfo(exe)
         {
             RedirectStandardOutput = true,
@@ -67,9 +134,12 @@ internal static class YtDlp
         psi.ArgumentList.Add("--no-playlist");
         psi.ArgumentList.Add("--dump-single-json");
         psi.ArgumentList.Add("--no-warnings");
-        psi.ArgumentList.Add("-f");
-        psi.ArgumentList.Add(FormatSelector);
-        psi.ArgumentList.Add(url);
+        if (!string.IsNullOrWhiteSpace(formatSelector))
+        {
+            psi.ArgumentList.Add("-f");
+            psi.ArgumentList.Add(formatSelector);
+        }
+        psi.ArgumentList.Add(targetUrl);
 
         using var p = Process.Start(psi)
             ?? throw new InvalidOperationException("Nepodařilo se spustit yt-dlp.exe.");
@@ -93,45 +163,7 @@ internal static class YtDlp
             throw new TimeoutException($"yt-dlp neodpověděl v časovém limitu ({(int)DefaultTimeout.TotalSeconds} s).");
         }
 
-        var stdout = await outTask;
-        var stderr = await errTask;
-
-        if (p.ExitCode != 0 || string.IsNullOrWhiteSpace(stdout))
-        {
-            var err = stderr.Trim();
-            var detail = err.Length > 0 ? err : $"ukončeno s kódem {p.ExitCode}";
-            throw new InvalidOperationException("yt-dlp nedokázal získat odkaz: " + detail);
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(stdout);
-            var root = doc.RootElement;
-            string? mediaUrl = GetJsonString(root, "url");
-            if (string.IsNullOrWhiteSpace(mediaUrl) &&
-                root.TryGetProperty("requested_downloads", out var reqDl) &&
-                reqDl.ValueKind == JsonValueKind.Array &&
-                reqDl.GetArrayLength() > 0)
-            {
-                mediaUrl = GetJsonString(reqDl[0], "url");
-            }
-
-            if (string.IsNullOrWhiteSpace(mediaUrl))
-                throw new InvalidOperationException("yt-dlp nevrátil přímou URL videa.");
-
-            var title = GetJsonString(root, "title");
-            string? subPath = null;
-            string? subSource = null;
-
-            if (autoCzechSubtitles)
-                (subPath, subSource) = await TryFetchCzechSubtitlesAsync(root, url, ct);
-
-            return new YtResolvedMedia(mediaUrl, title, subPath, subSource);
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException("Neplatná JSON odpověď z yt-dlp: " + ex.Message);
-        }
+        return (p.ExitCode, await outTask, await errTask);
     }
 
     private static async Task<(string? Path, string? Source)> TryFetchCzechSubtitlesAsync(
@@ -343,7 +375,7 @@ internal static class YtDlp
 
         if (youtubeMusic)
         {
-            psi.ArgumentList.Add($"https://music.youtube.com/search?q={Uri.EscapeDataString(query.Trim())}");
+            psi.ArgumentList.Add($"https://music.youtube.com/search?q={Uri.EscapeDataString(query.Trim())}#songs");
         }
         else
         {
@@ -385,10 +417,28 @@ internal static class YtDlp
                 var root = doc.RootElement;
 
                 var title = GetJsonString(root, "title") ?? "";
+                var id = GetJsonString(root, "id") ?? "";
                 var url = GetJsonString(root, "webpage_url") ?? GetJsonString(root, "url") ?? "";
                 if (url.Length > 0 && !url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
-                    url = "https://www.youtube.com/watch?v=" + url;
+                {
+                    url = (youtubeMusic ? "https://music.youtube.com/watch?v=" : "https://www.youtube.com/watch?v=") + url;
+                }
+                else if (url.Length == 0 && id.Length == 11)
+                {
+                    url = (youtubeMusic ? "https://music.youtube.com/watch?v=" : "https://www.youtube.com/watch?v=") + id;
+                }
+
                 if (url.Length == 0) continue;
+
+                // Skip non-playable album/playlist/channel browse pages
+                if (!url.Contains("watch?v=", StringComparison.OrdinalIgnoreCase) &&
+                    (url.Contains("/browse/", StringComparison.OrdinalIgnoreCase) ||
+                     url.Contains("/channel/", StringComparison.OrdinalIgnoreCase) ||
+                     url.Contains("/user/", StringComparison.OrdinalIgnoreCase) ||
+                     url.Contains("/@", StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
 
                 var duration = GetJsonString(root, "duration_string");
                 if (string.IsNullOrEmpty(duration) && root.TryGetProperty("duration", out var durProp) &&
@@ -411,14 +461,130 @@ internal static class YtDlp
             catch (JsonException) { }
         }
 
-        if (p.ExitCode != 0 && results.Count == 0)
+        if (p.ExitCode != 0 && results.Count == 0 && !youtubeMusic)
         {
             var err = stderr.Trim();
             throw new InvalidOperationException("yt-dlp vyhledávání selhalo: " + (err.Length > 0 ? err : $"kód {p.ExitCode}"));
         }
 
+        // Fallback for YouTube Music if #songs shelf had fewer items on a deeper page
+        if (youtubeMusic && results.Count == 0)
+        {
+            var fallback = await SearchAsync(exe, query, maxResults, ct, offset, youtubeMusic: false);
+            return fallback
+                .Select(r => r with
+                {
+                    Url = r.Url.Replace("www.youtube.com/", "music.youtube.com/", StringComparison.OrdinalIgnoreCase),
+                    Channel = string.IsNullOrWhiteSpace(r.Channel) ? "🎵 YouTube Music" : r.Channel,
+                })
+                .ToList();
+        }
+
         return results;
     }
+
+    internal static string? ExtractDirectMediaUrl(JsonElement root)
+    {
+        var direct = GetJsonString(root, "url");
+        if (IsPlayableStreamUrl(direct)) return direct;
+
+        if (root.TryGetProperty("requested_downloads", out var reqDl) &&
+            reqDl.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in reqDl.EnumerateArray())
+            {
+                var u = GetJsonString(item, "url");
+                if (IsPlayableStreamUrl(u)) return u;
+            }
+        }
+
+        if (root.TryGetProperty("requested_formats", out var reqFmt) &&
+            reqFmt.ValueKind == JsonValueKind.Array)
+        {
+            string? audioUrl = null, anyUrl = null;
+            foreach (var item in reqFmt.EnumerateArray())
+            {
+                var u = GetJsonString(item, "url");
+                if (!IsPlayableStreamUrl(u)) continue;
+                var acodec = GetJsonString(item, "acodec") ?? "";
+                var vcodec = GetJsonString(item, "vcodec") ?? "";
+                if (!acodec.Equals("none", StringComparison.OrdinalIgnoreCase) &&
+                    !vcodec.Equals("none", StringComparison.OrdinalIgnoreCase))
+                    return u;
+                if (!acodec.Equals("none", StringComparison.OrdinalIgnoreCase) && audioUrl == null)
+                    audioUrl = u;
+                anyUrl ??= u;
+            }
+            if (audioUrl != null) return audioUrl;
+            if (anyUrl != null) return anyUrl;
+        }
+
+        if (root.TryGetProperty("formats", out var formats) &&
+            formats.ValueKind == JsonValueKind.Array)
+        {
+            string? bestProgressiveMp4 = null;
+            string? bestWithAudio = null;
+            string? bestAny = null;
+
+            foreach (var fmt in formats.EnumerateArray())
+            {
+                var ext = GetJsonString(fmt, "ext") ?? "";
+                var protocol = GetJsonString(fmt, "protocol") ?? "";
+                if (ext.Equals("mhtml", StringComparison.OrdinalIgnoreCase) ||
+                    protocol.Equals("mhtml", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var u = GetJsonString(fmt, "url");
+                if (!IsPlayableStreamUrl(u)) continue;
+
+                var acodec = GetJsonString(fmt, "acodec") ?? "";
+                var vcodec = GetJsonString(fmt, "vcodec") ?? "";
+                bool hasAudio = !string.IsNullOrEmpty(acodec) && !acodec.Equals("none", StringComparison.OrdinalIgnoreCase);
+                bool hasVideo = !string.IsNullOrEmpty(vcodec) && !vcodec.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+                if (hasAudio && hasVideo && ext.Equals("mp4", StringComparison.OrdinalIgnoreCase))
+                    bestProgressiveMp4 = u;
+                if (hasAudio)
+                    bestWithAudio = u;
+                bestAny = u;
+            }
+
+            return bestProgressiveMp4 ?? bestWithAudio ?? bestAny;
+        }
+
+        return null;
+    }
+
+    private static bool TryExtractFirstEntryWatchUrl(JsonElement root, out string? watchUrl)
+    {
+        watchUrl = null;
+        if (!root.TryGetProperty("entries", out var entries) || entries.ValueKind != JsonValueKind.Array)
+            return false;
+
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (entry.ValueKind != JsonValueKind.Object) continue;
+            var u = GetJsonString(entry, "webpage_url") ?? GetJsonString(entry, "url");
+            var id = GetJsonString(entry, "id");
+            if (!string.IsNullOrWhiteSpace(u) && u.Contains("watch?v=", StringComparison.OrdinalIgnoreCase))
+            {
+                watchUrl = u;
+                return true;
+            }
+            if (!string.IsNullOrWhiteSpace(id) && id.Length == 11)
+            {
+                watchUrl = "https://www.youtube.com/watch?v=" + id;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static bool IsPlayableStreamUrl(string? url) =>
+        !string.IsNullOrWhiteSpace(url) &&
+        (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+         url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+        !url.Contains("/browse/", StringComparison.OrdinalIgnoreCase);
 
     private static string? GetJsonString(JsonElement obj, string prop) =>
         obj.TryGetProperty(prop, out var val) && val.ValueKind == JsonValueKind.String ? val.GetString() : null;

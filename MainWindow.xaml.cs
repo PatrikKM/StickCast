@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private TranscodeStream? _transcodeStream;
     private MiniPlayerWindow? _miniPlayer;
     private CancellationTokenSource? _downloadCts;
+    private CancellationTokenSource? _resolveCts;
     private bool _isScreenStreaming;
     private bool _forceExit;
     private bool _pcPlaybackActive;

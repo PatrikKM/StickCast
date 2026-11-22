@@ -10,7 +10,21 @@ public partial class MainWindow
 {
     private const int YtPageSize = 10;
 
-    private async void PlayUrl_Click(object sender, RoutedEventArgs e) => await SafeAsync(() => PlayUrlAsync(UrlBox.Text));
+    private async void PlayUrl_Click(object sender, RoutedEventArgs e) => await SafeAsync(async () =>
+    {
+        var box = UrlBox.Text.Trim();
+        bool boxIsHttp = box.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         box.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (!boxIsHttp && YtResultsPanel.Visibility == Visibility.Visible &&
+            YtResultsList.SelectedItem is YtSearchResult sel &&
+            !string.IsNullOrWhiteSpace(_ytLastQuery) &&
+            box.Equals(_ytLastQuery, StringComparison.OrdinalIgnoreCase))
+        {
+            await PlayUrlAsync(sel.Url, ytIndex: YtResultsList.SelectedIndex);
+            return;
+        }
+        await PlayUrlAsync(box);
+    });
 
     private async void PasteAndPlay_Click(object sender, RoutedEventArgs e) => await SafeAsync(async () =>
     {
@@ -34,23 +48,57 @@ public partial class MainWindow
         if (e.Key == Key.Enter) await SafeAsync(() => PlayUrlAsync(UrlBox.Text));
     }
 
+    private string GetEffectiveSearchQuery()
+    {
+        var box = UrlBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(box))
+            return _ytLastQuery;
+        if (!string.IsNullOrWhiteSpace(_ytLastQuery) &&
+            (box.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+             box.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+            (_ytResults.Any(r => r.Url.Equals(box, StringComparison.OrdinalIgnoreCase)) ||
+             _ytPageCache.Values.SelectMany(x => x).Any(r => r.Url.Equals(box, StringComparison.OrdinalIgnoreCase)) ||
+             YtDlp.IsVideoPortal(box)))
+        {
+            return _ytLastQuery;
+        }
+        return box;
+    }
+
     private async void YtSearch_Click(object sender, RoutedEventArgs e) =>
-        await SafeAsync(() => SearchYouTubeAsync(UrlBox.Text.Trim(), pageIndex: 0, isMusic: false));
+        await SafeAsync(() => SearchYouTubeAsync(GetEffectiveSearchQuery(), pageIndex: 0, isMusic: false));
 
     private async void YtMusicSearch_Click(object sender, RoutedEventArgs e) =>
-        await SafeAsync(() => SearchYouTubeAsync(UrlBox.Text.Trim(), pageIndex: 0, isMusic: true));
+        await SafeAsync(() => SearchYouTubeAsync(GetEffectiveSearchQuery(), pageIndex: 0, isMusic: true));
+
+    private async void YtNextTrack_Click(object sender, RoutedEventArgs e) =>
+        await SafeAsync(PlayNextYtResultAsync);
 
     private async void YtPrevPage_Click(object sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(_ytLastQuery) || _ytPageIndex <= 0) return;
-        await SafeAsync(() => SearchYouTubeAsync(_ytLastQuery, _ytPageIndex - 1, _ytLastIsMusic));
+        var q = GetEffectiveSearchQuery();
+        if (string.IsNullOrWhiteSpace(q) || _ytPageIndex <= 0) return;
+        bool wasPlayingYt = _pcPlaybackActive && (_playingFromYtSearch || !_playingFromPlaylist);
+        await SafeAsync(async () =>
+        {
+            await SearchYouTubeAsync(q, _ytPageIndex - 1, _ytLastIsMusic);
+            if (wasPlayingYt && _ytResults.Count > 0)
+                await PlayUrlAsync(_ytResults[0].Url, ytIndex: 0);
+        });
     }
 
     private async void YtNextPage_Click(object sender, RoutedEventArgs e)
     {
-        var q = !string.IsNullOrWhiteSpace(_ytLastQuery) ? _ytLastQuery : UrlBox.Text.Trim();
+        var q = GetEffectiveSearchQuery();
         if (string.IsNullOrWhiteSpace(q)) return;
-        await SafeAsync(() => SearchYouTubeAsync(q, _ytPageIndex + 1, _ytLastIsMusic));
+        bool wasPlayingYt = _pcPlaybackActive && (_playingFromYtSearch || !_playingFromPlaylist);
+        int prevPage = _ytPageIndex;
+        await SafeAsync(async () =>
+        {
+            await SearchYouTubeAsync(q, _ytPageIndex + 1, _ytLastIsMusic);
+            if (wasPlayingYt && _ytPageIndex > prevPage && _ytResults.Count > 0)
+                await PlayUrlAsync(_ytResults[0].Url, ytIndex: 0);
+        });
     }
 
     private void CloseYtResults_Click(object sender, RoutedEventArgs e)
@@ -68,15 +116,14 @@ public partial class MainWindow
         if (YtResultsList.SelectedItem is YtSearchResult res)
         {
             int idx = YtResultsList.SelectedIndex;
-            UrlBox.Text = res.Url;
             await SafeAsync(() => PlayUrlAsync(res.Url, ytIndex: idx));
         }
     }
 
     private void YtResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_uiReady && YtResultsList.SelectedItem is YtSearchResult res)
-            UrlBox.Text = res.Url;
+        if (_uiReady && YtResultsList.SelectedIndex >= 0)
+            _currentYtIndex = YtResultsList.SelectedIndex;
     }
 
     private async void PlaySelectedYt_Click(object sender, RoutedEventArgs e)
@@ -84,7 +131,6 @@ public partial class MainWindow
         if (YtResultsList.SelectedItem is YtSearchResult res)
         {
             int idx = YtResultsList.SelectedIndex;
-            UrlBox.Text = res.Url;
             await SafeAsync(() => PlayUrlAsync(res.Url, ytIndex: idx));
         }
     }
@@ -400,6 +446,11 @@ public partial class MainWindow
             _ytPageIndex = pageIndex;
             _ytResults.Clear();
             foreach (var item in results) _ytResults.Add(item);
+            if (_ytResults.Count > 0)
+            {
+                _currentYtIndex = 0;
+                YtResultsList.SelectedIndex = 0;
+            }
 
             int shownEnd = startNum + Math.Max(0, _ytResults.Count - 1);
             var prefix = music ? "🎵 Výsledky z YouTube Music" : "Výsledky z YouTube";
@@ -412,7 +463,7 @@ public partial class MainWindow
         finally
         {
             YtPrevPageButton.IsEnabled = _ytPageIndex > 0;
-            YtNextPageButton.IsEnabled = _ytResults.Count >= YtPageSize;
+            YtNextPageButton.IsEnabled = _ytResults.Count > 0;
         }
     }
 
@@ -420,27 +471,44 @@ public partial class MainWindow
     {
         if (_ytResults.Count == 0) return;
 
-        int nextIdx = _currentYtIndex + 1;
-        if (nextIdx >= 0 && nextIdx < _ytResults.Count)
+        for (int attempt = 0; attempt < 3; attempt++)
         {
-            var next = _ytResults[nextIdx];
-            YtResultsList.SelectedIndex = nextIdx;
-            UrlBox.Text = next.Url;
-            await PlayUrlAsync(next.Url, ytIndex: nextIdx);
-            return;
-        }
+            int baseIdx = _currentYtIndex >= 0
+                ? _currentYtIndex
+                : (YtResultsList.SelectedIndex >= 0 ? YtResultsList.SelectedIndex : -1);
 
-        if (!string.IsNullOrWhiteSpace(_ytLastQuery))
-        {
-            int prevPage = _ytPageIndex;
-            await SearchYouTubeAsync(_ytLastQuery, _ytPageIndex + 1, _ytLastIsMusic);
-            if (_ytPageIndex > prevPage && _ytResults.Count > 0)
+            int nextIdx = baseIdx + 1;
+            if (nextIdx >= 0 && nextIdx < _ytResults.Count)
             {
-                var first = _ytResults[0];
-                YtResultsList.SelectedIndex = 0;
-                UrlBox.Text = first.Url;
-                await PlayUrlAsync(first.Url, ytIndex: 0);
+                var next = _ytResults[nextIdx];
+                _currentYtIndex = nextIdx;
+                _playingFromYtSearch = true;
+                YtResultsList.SelectedIndex = nextIdx;
+                YtResultsList.ScrollIntoView(next);
+                if (await PlayUrlAsync(next.Url, ytIndex: nextIdx))
+                    return;
+                Log($"Přeskakuji nedostupnou položku: {next.Title}");
+                continue;
             }
+
+            var q = !string.IsNullOrWhiteSpace(_ytLastQuery) ? _ytLastQuery : GetEffectiveSearchQuery();
+            if (!string.IsNullOrWhiteSpace(q))
+            {
+                int prevPage = _ytPageIndex;
+                await SearchYouTubeAsync(q, _ytPageIndex + 1, _ytLastIsMusic);
+                if (_ytPageIndex > prevPage && _ytResults.Count > 0)
+                {
+                    var first = _ytResults[0];
+                    _currentYtIndex = 0;
+                    _playingFromYtSearch = true;
+                    YtResultsList.SelectedIndex = 0;
+                    YtResultsList.ScrollIntoView(first);
+                    if (await PlayUrlAsync(first.Url, ytIndex: 0))
+                        return;
+                    continue;
+                }
+            }
+            break;
         }
     }
 
@@ -448,56 +516,70 @@ public partial class MainWindow
     {
         if (_ytResults.Count == 0) return;
 
-        int prevIdx = _currentYtIndex - 1;
+        int baseIdx = _currentYtIndex >= 0
+            ? _currentYtIndex
+            : (YtResultsList.SelectedIndex >= 0 ? YtResultsList.SelectedIndex : 0);
+
+        int prevIdx = baseIdx - 1;
         if (prevIdx >= 0 && prevIdx < _ytResults.Count)
         {
             var prev = _ytResults[prevIdx];
+            _currentYtIndex = prevIdx;
+            _playingFromYtSearch = true;
             YtResultsList.SelectedIndex = prevIdx;
-            UrlBox.Text = prev.Url;
+            YtResultsList.ScrollIntoView(prev);
             await PlayUrlAsync(prev.Url, ytIndex: prevIdx);
             return;
         }
 
-        if (_ytPageIndex > 0 && !string.IsNullOrWhiteSpace(_ytLastQuery))
+        var q = !string.IsNullOrWhiteSpace(_ytLastQuery) ? _ytLastQuery : GetEffectiveSearchQuery();
+        if (_ytPageIndex > 0 && !string.IsNullOrWhiteSpace(q))
         {
-            await SearchYouTubeAsync(_ytLastQuery, _ytPageIndex - 1, _ytLastIsMusic);
+            await SearchYouTubeAsync(q, _ytPageIndex - 1, _ytLastIsMusic);
             if (_ytResults.Count > 0)
             {
                 int lastIdx = _ytResults.Count - 1;
                 var last = _ytResults[lastIdx];
+                _currentYtIndex = lastIdx;
+                _playingFromYtSearch = true;
                 YtResultsList.SelectedIndex = lastIdx;
-                UrlBox.Text = last.Url;
+                YtResultsList.ScrollIntoView(last);
                 await PlayUrlAsync(last.Url, ytIndex: lastIdx);
             }
         }
     }
 
-    private async Task PlayUrlAsync(string input, int? ytIndex = null)
+    private async Task<bool> PlayUrlAsync(string input, int? ytIndex = null)
     {
         var url = input.Trim();
-        if (url.Length == 0) return;
+        if (url.Length == 0) return false;
 
         bool looksLikeHttp = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                              url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         if (!looksLikeHttp && !Uri.TryCreate(url, UriKind.Absolute, out _))
         {
             await SearchYouTubeAsync(url);
-            return;
+            return false;
         }
 
         if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUri))
         {
             SetStatus("Neplatná URL adresa");
-            return;
+            return false;
         }
 
         if (looksLikeHttp && await TryLoadRemoteM3uAsync(url, parsedUri))
-            return;
+            return true;
 
-        if (RequireDevice() is not { } r) return;
+        if (RequireDevice() is not { } r) return false;
 
+        // Cancel any in-flight yt-dlp resolution so pressing Next responds immediately
+        try { _resolveCts?.Cancel(); } catch { }
         await _playLock.WaitAsync(_cts.Token);
+        using var resolveCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        _resolveCts = resolveCts;
         _isStartingPlayback = true;
+        bool started = false;
         try
         {
             await SafeAsync(async () =>
@@ -521,7 +603,7 @@ public partial class MainWindow
                         SetStatus(wantSubs ? "Získávám odkaz a české titulky…" : "Získávám přímý odkaz přes yt-dlp…");
                         try
                         {
-                            var resolved = await YtDlp.ResolveWithSubtitlesAsync(ytdlp, url, wantSubs, _cts.Token);
+                            var resolved = await YtDlp.ResolveWithSubtitlesAsync(ytdlp, url, wantSubs, resolveCts.Token);
                             playUrl = resolved.MediaUrl;
                             ytTitle = resolved.Title;
                             subPath = resolved.SubtitleSrtPath;
@@ -529,6 +611,10 @@ public partial class MainWindow
                             resolvedByYtDlp = true;
                             Log("yt-dlp → " + playUrl);
                             if (subPath != null) Log($"Titulky ({subSource}): {subPath}");
+                        }
+                        catch (OperationCanceledException) when (! _cts.IsCancellationRequested)
+                        {
+                            return;
                         }
                         catch (Exception ex) when (!YtDlp.IsVideoPortal(url))
                         {
@@ -611,10 +697,13 @@ public partial class MainWindow
                 var targetLabel = r.IsLocalMonitor ? "monitoru PC" : "TV";
                 SetStatus(subSource != null ? $"Přehrává se na {targetLabel} ({subSource})" : $"Přehrává se na {targetLabel}");
                 AddRecentUrl(url, title);
+                started = true;
             });
+            return started;
         }
         finally
         {
+            if (ReferenceEquals(_resolveCts, resolveCts)) _resolveCts = null;
             _isStartingPlayback = false;
             _playLock.Release();
         }

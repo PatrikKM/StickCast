@@ -89,9 +89,11 @@
                         <DockPanel x:Name="YtResultsPanel" DockPanel.Dock="Top" Visibility="Collapsed" Margin="0,8,0,0" MaxHeight="230">
                             <DockPanel DockPanel.Dock="Top" Margin="4,0,4,4">
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                    <Button x:Name="YtPrevPageButton" Content="◀ Předchozí" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
+                                    <Button Content="⏭ Další skladba" Padding="9,3" Margin="0,0,6,0"
+                                            Click="YtNextTrack_Click" ToolTip="Přehrát další vyhledanou skladbu/video v seznamu"/>
+                                    <Button x:Name="YtPrevPageButton" Content="◀ Předchozích 10" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
                                             Click="YtPrevPage_Click" ToolTip="Předchozích 10 výsledků"/>
-                                    <Button x:Name="YtNextPageButton" Content="Další ▶" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,8,0"
+                                    <Button x:Name="YtNextPageButton" Content="Dalších 10 ▶" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,8,0"
                                             Click="YtNextPage_Click" ToolTip="Načíst dalších 10 výsledků"/>
                                     <Button Content="⭐ Do oblíbených" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
                                             Click="AddYtToFavorites_Click"/>

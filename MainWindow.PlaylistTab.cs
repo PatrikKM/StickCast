@@ -352,7 +352,7 @@ public partial class MainWindow
 
     private async Task NextAsync()
     {
-        if (_playingFromYtSearch && _ytResults.Count > 0)
+        if ((_playingFromYtSearch || !_playingFromPlaylist) && _ytResults.Count > 0)
         {
             await PlayNextYtResultAsync();
             return;
@@ -364,7 +364,7 @@ public partial class MainWindow
 
     private async Task PrevAsync()
     {
-        if (_playingFromYtSearch && _ytResults.Count > 0)
+        if ((_playingFromYtSearch || !_playingFromPlaylist) && _ytResults.Count > 0)
         {
             await PlayPrevYtResultAsync();
             return;
