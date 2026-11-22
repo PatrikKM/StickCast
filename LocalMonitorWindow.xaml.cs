@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using LibVLCSharp.Shared;
 using StickCast.Net;
 using StickCast.Services;
 
@@ -15,20 +16,26 @@ public partial class LocalMonitorWindow : Window
 {
     private const uint SWP_NOZORDER = 0x0004;
     private const uint SWP_NOACTIVATE = 0x0010;
+    private static bool _vlcCoreInitialized;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
-    private readonly DispatcherTimer _uiTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
+    private readonly DispatcherTimer _uiTimer = new() { Interval = TimeSpan.FromMilliseconds(200) };
     private readonly DispatcherTimer _hudHideTimer = new() { Interval = TimeSpan.FromSeconds(3.2) };
+    private readonly LibVLC _libVlc;
+    private readonly MediaPlayer _mediaPlayer;
+    private Media? _currentMedia;
+
     private MonitorChoice _monitor;
-    private List<SubtitleCue> _cues = new();
     private string _state = "STOPPED";
     private TimeSpan _duration = TimeSpan.Zero;
     private string? _lastUrl;
     private string _lastTitle = "";
     private string _lastMime = "video/mp4";
     private string? _lastSubtitleUrl;
+    private int _volume = 80;
+    private bool _muted;
     private bool _isFullscreen;
     private bool _allowClose;
     private bool _seekDragging;
@@ -51,6 +58,12 @@ public partial class LocalMonitorWindow : Window
         Action? onMediaEnded = null,
         Action<string>? onStateChanged = null)
     {
+        if (!_vlcCoreInitialized)
+        {
+            Core.Initialize();
+            _vlcCoreInitialized = true;
+        }
+
         _monitor = monitor;
         _log = log;
         _onPrevTrack = onPrevTrack;
@@ -58,7 +71,52 @@ public partial class LocalMonitorWindow : Window
         _onStopRequested = onStopRequested;
         _onMediaEnded = onMediaEnded;
         _onStateChanged = onStateChanged;
+
+        _libVlc = new LibVLC(
+            "--no-video-title-show",
+            "--sub-autodetect-file",
+            "--freetype-color=16776960",
+            "--freetype-bold",
+            "--freetype-outline-thickness=4",
+            "--freetype-shadow-opacity=200",
+            "--freetype-background-opacity=140",
+            "--freetype-rel-fontsize=16",
+            "--network-caching=1000");
+        _mediaPlayer = new MediaPlayer(_libVlc)
+        {
+            Volume = _volume,
+            Mute = _muted,
+        };
+
         InitializeComponent();
+
+        VlcVideoView.MediaPlayer = _mediaPlayer;
+        VlcVideoView.Loaded += (_, _) =>
+        {
+            if (VlcVideoView.MediaPlayer == null)
+                VlcVideoView.MediaPlayer = _mediaPlayer;
+        };
+
+        _mediaPlayer.Playing += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            long len = _mediaPlayer.Length;
+            if (len > 0) _duration = TimeSpan.FromMilliseconds(len);
+            SetState("PLAYING", notifyHost: true);
+        });
+        _mediaPlayer.Paused += (_, _) => Dispatcher.BeginInvoke(() => SetState("PAUSED_PLAYBACK", notifyHost: true));
+        _mediaPlayer.EndReached += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            _uiTimer.Stop();
+            SetState("STOPPED", notifyHost: false);
+            _onMediaEnded?.Invoke();
+        });
+        _mediaPlayer.EncounteredError += (_, _) => Dispatcher.BeginInvoke(() =>
+        {
+            _uiTimer.Stop();
+            SetState("STOPPED", notifyHost: true);
+            StateBadgeText.Text = "⚠ chyba přehrávání";
+            _log?.Invoke("LibVLC: chyba při přehrávání média.");
+        });
 
         MonitorLabelText.Text = $"💻 {monitor.Label}  •  Dvojklik nebo F11 = celá obrazovka";
         SeekSlider.AddHandler(Thumb.DragStartedEvent, new DragStartedEventHandler(SeekSlider_DragStarted));
@@ -80,16 +138,27 @@ public partial class LocalMonitorWindow : Window
     }
 
     public string TransportState => _state;
-    public TimeSpan CurrentPosition => PhotoView.Visibility == Visibility.Visible ? TimeSpan.Zero : Player.Position;
+
+    public TimeSpan CurrentPosition
+    {
+        get
+        {
+            if (PhotoView.Visibility == Visibility.Visible) return TimeSpan.Zero;
+            long ms = _mediaPlayer.Time;
+            return ms > 0 ? TimeSpan.FromMilliseconds(ms) : TimeSpan.Zero;
+        }
+    }
+
     public TimeSpan CurrentDuration => _duration;
 
     public int VolumePercent
     {
-        get => (int)Math.Round(Player.Volume * 100.0);
+        get => _volume;
         set
         {
             int clamped = Math.Clamp(value, 0, 100);
-            Player.Volume = clamped / 100.0;
+            _volume = clamped;
+            _mediaPlayer.Volume = clamped;
             _updatingVolumeUi = true;
             VolumeSlider.Value = clamped;
             VolumeText.Text = $"{clamped}%";
@@ -99,10 +168,11 @@ public partial class LocalMonitorWindow : Window
 
     public bool IsMuted
     {
-        get => Player.IsMuted;
+        get => _muted;
         set
         {
-            Player.IsMuted = value;
+            _muted = value;
+            _mediaPlayer.Mute = value;
             MuteButton.Content = value ? "🔇" : "🔊";
         }
     }
@@ -132,14 +202,11 @@ public partial class LocalMonitorWindow : Window
             WindowState = WindowState.Normal;
         Activate();
 
-        await LoadSubtitlesAsync(subtitleUrl);
-
         if (mime.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
             _uiTimer.Stop();
-            SubtitleBorder.Visibility = Visibility.Collapsed;
-            Player.Stop();
-            Player.Visibility = Visibility.Collapsed;
+            _mediaPlayer.Stop();
+            VlcVideoView.Visibility = Visibility.Collapsed;
 
             var bmp = new BitmapImage();
             bmp.BeginInit();
@@ -156,22 +223,37 @@ public partial class LocalMonitorWindow : Window
 
         PhotoView.Visibility = Visibility.Collapsed;
         PhotoView.Source = null;
-        Player.Visibility = Visibility.Visible;
+        VlcVideoView.Visibility = Visibility.Visible;
+        if (VlcVideoView.MediaPlayer == null)
+            VlcVideoView.MediaPlayer = _mediaPlayer;
+
         _duration = TimeSpan.Zero;
         SetState("TRANSITIONING", notifyHost: false);
         UpdateTimelineUi(TimeSpan.Zero, TimeSpan.Zero);
 
-        Player.Stop();
-        Player.Source = new Uri(url, UriKind.Absolute);
-        Player.Play();
-        SetState("PLAYING", notifyHost: true);
+        var localSubPath = await ResolveLocalSubtitleFileAsync(subtitleUrl);
+
+        await Task.Run(() =>
+        {
+            _mediaPlayer.Stop();
+            _currentMedia?.Dispose();
+            var mrl = new Uri(url, UriKind.Absolute);
+            var media = new Media(_libVlc, mrl);
+            if (!string.IsNullOrWhiteSpace(localSubPath) && File.Exists(localSubPath))
+                media.AddOption($":sub-file={localSubPath}");
+            _currentMedia = media;
+            _mediaPlayer.Volume = _volume;
+            _mediaPlayer.Mute = _muted;
+            _mediaPlayer.Play(media);
+        });
+
         _uiTimer.Start();
     }
 
     public void PausePlayback(bool notifyHost = false)
     {
         if (PhotoView.Visibility == Visibility.Visible) return;
-        Player.Pause();
+        _mediaPlayer.SetPause(true);
         SetState("PAUSED_PLAYBACK", notifyHost);
     }
 
@@ -180,11 +262,10 @@ public partial class LocalMonitorWindow : Window
         if (PhotoView.Visibility == Visibility.Visible) return;
         if (_state == "STOPPED" && !string.IsNullOrEmpty(_lastUrl))
         {
-            if (Player.Source == null)
-                Player.Source = new Uri(_lastUrl, UriKind.Absolute);
-            Player.Position = TimeSpan.Zero;
+            _ = PlayMediaAsync(_lastUrl, _lastTitle, _lastMime, _lastSubtitleUrl);
+            return;
         }
-        Player.Play();
+        _mediaPlayer.SetPause(false);
         SetState("PLAYING", notifyHost);
         _uiTimer.Start();
     }
@@ -192,8 +273,7 @@ public partial class LocalMonitorWindow : Window
     public void StopPlayback(bool notifyHost = false)
     {
         _uiTimer.Stop();
-        Player.Stop();
-        SubtitleBorder.Visibility = Visibility.Collapsed;
+        _ = Task.Run(() => { try { _mediaPlayer.Stop(); } catch { } });
         SetState("STOPPED", notifyHost);
         UpdateTimelineUi(TimeSpan.Zero, _duration);
     }
@@ -201,20 +281,22 @@ public partial class LocalMonitorWindow : Window
     public void SeekPlayback(TimeSpan pos)
     {
         if (PhotoView.Visibility == Visibility.Visible) return;
-        if (_duration > TimeSpan.Zero)
-            pos = TimeSpan.FromSeconds(Math.Clamp(pos.TotalSeconds, 0, _duration.TotalSeconds));
-        else if (pos < TimeSpan.Zero)
-            pos = TimeSpan.Zero;
+        long totalMs = _mediaPlayer.Length;
+        if (totalMs > 0)
+            _duration = TimeSpan.FromMilliseconds(totalMs);
 
-        Player.Position = pos;
-        UpdateTimelineUi(pos, _duration);
-        UpdateSubtitleOverlay();
+        long targetMs = (long)Math.Max(0, pos.TotalMilliseconds);
+        if (totalMs > 0) targetMs = Math.Min(targetMs, totalMs);
+
+        _mediaPlayer.Time = targetMs;
+        UpdateTimelineUi(TimeSpan.FromMilliseconds(targetMs), _duration);
     }
 
     public void SeekRelative(double deltaSeconds)
     {
         if (PhotoView.Visibility == Visibility.Visible) return;
-        var target = Player.Position + TimeSpan.FromSeconds(deltaSeconds);
+        var cur = CurrentPosition;
+        var target = cur + TimeSpan.FromSeconds(deltaSeconds);
         if (target < TimeSpan.Zero) target = TimeSpan.Zero;
         if (_duration > TimeSpan.Zero && target > _duration) target = _duration;
         SeekPlayback(target);
@@ -225,7 +307,10 @@ public partial class LocalMonitorWindow : Window
         _allowClose = true;
         _uiTimer.Stop();
         _hudHideTimer.Stop();
-        try { Player.Stop(); } catch { }
+        try { _mediaPlayer.Stop(); } catch { }
+        try { _currentMedia?.Dispose(); } catch { }
+        try { _mediaPlayer.Dispose(); } catch { }
+        try { _libVlc.Dispose(); } catch { }
         Close();
     }
 
@@ -247,13 +332,12 @@ public partial class LocalMonitorWindow : Window
     private void OnUiTimerTick()
     {
         if (PhotoView.Visibility == Visibility.Visible) return;
-        if (Player.NaturalDuration.HasTimeSpan)
-            _duration = Player.NaturalDuration.TimeSpan;
+        long len = _mediaPlayer.Length;
+        if (len > 0)
+            _duration = TimeSpan.FromMilliseconds(len);
 
         if (!_seekDragging)
-            UpdateTimelineUi(Player.Position, _duration);
-
-        UpdateSubtitleOverlay();
+            UpdateTimelineUi(CurrentPosition, _duration);
     }
 
     private void UpdateTimelineUi(TimeSpan pos, TimeSpan dur)
@@ -275,90 +359,29 @@ public partial class LocalMonitorWindow : Window
         }
     }
 
-    private async Task LoadSubtitlesAsync(string? subtitleUrl)
+    private async Task<string?> ResolveLocalSubtitleFileAsync(string? subtitleUrl)
     {
-        _cues.Clear();
-        SubtitleBorder.Visibility = Visibility.Collapsed;
-        if (string.IsNullOrWhiteSpace(subtitleUrl)) return;
-
+        if (string.IsNullOrWhiteSpace(subtitleUrl)) return null;
         try
         {
-            string raw;
+            if (File.Exists(subtitleUrl))
+                return subtitleUrl;
+
             if (subtitleUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                 subtitleUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
             {
-                raw = await HttpClients.ShortFetch.GetStringAsync(subtitleUrl);
+                var raw = await HttpClients.ShortFetch.GetStringAsync(subtitleUrl);
+                if (string.IsNullOrWhiteSpace(raw)) return null;
+                var tmp = Path.Combine(Subtitles.GetCacheDirectory(), "vlc_current.srt");
+                await File.WriteAllTextAsync(tmp, raw, new System.Text.UTF8Encoding(false));
+                return tmp;
             }
-            else if (File.Exists(subtitleUrl))
-            {
-                raw = await File.ReadAllTextAsync(subtitleUrl);
-            }
-            else
-            {
-                return;
-            }
-
-            _cues = Subtitles.ParseVttOrSrt(raw);
-            _log?.Invoke($"Lokální přehrávač: načteno {_cues.Count} žlutých titulků.");
         }
         catch (Exception ex)
         {
             _log?.Invoke($"Lokální titulky nelze načíst: {ex.Message}");
         }
-    }
-
-    private void UpdateSubtitleOverlay()
-    {
-        if (_cues.Count == 0 || _state is "STOPPED" or "NO_MEDIA_PRESENT")
-        {
-            SubtitleBorder.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        var pos = Player.Position;
-        SubtitleCue? active = null;
-        for (int i = 0; i < _cues.Count; i++)
-        {
-            var c = _cues[i];
-            if (pos >= c.Start && pos <= c.End)
-            {
-                active = c;
-                break;
-            }
-        }
-
-        if (active == null || string.IsNullOrWhiteSpace(active.Text))
-        {
-            SubtitleBorder.Visibility = Visibility.Collapsed;
-        }
-        else
-        {
-            SubtitleText.Text = active.Text;
-            SubtitleBorder.Visibility = Visibility.Visible;
-        }
-    }
-
-    private void Player_MediaOpened(object sender, RoutedEventArgs e)
-    {
-        _duration = Player.NaturalDuration.HasTimeSpan ? Player.NaturalDuration.TimeSpan : TimeSpan.Zero;
-        SetState("PLAYING", notifyHost: true);
-        UpdateTimelineUi(Player.Position, _duration);
-    }
-
-    private void Player_MediaEnded(object sender, RoutedEventArgs e)
-    {
-        _uiTimer.Stop();
-        SubtitleBorder.Visibility = Visibility.Collapsed;
-        SetState("STOPPED", notifyHost: false);
-        _onMediaEnded?.Invoke();
-    }
-
-    private void Player_MediaFailed(object? sender, ExceptionRoutedEventArgs e)
-    {
-        _uiTimer.Stop();
-        SubtitleBorder.Visibility = Visibility.Collapsed;
-        SetState("STOPPED", notifyHost: true);
-        _log?.Invoke($"Chyba lokálního přehrávače: {e.ErrorException?.Message}");
+        return null;
     }
 
     // ------------------------------------------------------------------ Transport bar handlers
@@ -394,8 +417,7 @@ public partial class LocalMonitorWindow : Window
     private void PrepareForTrackSwitch(string badgeText)
     {
         _uiTimer.Stop();
-        try { Player.Stop(); } catch { }
-        SubtitleBorder.Visibility = Visibility.Collapsed;
+        _ = Task.Run(() => { try { _mediaPlayer.Stop(); } catch { } });
         _state = "TRANSITIONING";
         StateBadgeText.Text = badgeText;
     }
@@ -404,10 +426,11 @@ public partial class LocalMonitorWindow : Window
 
     private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (_updatingVolumeUi || Player == null) return;
+        if (_updatingVolumeUi) return;
         int vol = (int)Math.Round(VolumeSlider.Value);
-        Player.Volume = Math.Clamp(vol, 0, 100) / 100.0;
-        if (VolumeText != null) VolumeText.Text = $"{vol}%";
+        _volume = Math.Clamp(vol, 0, 100);
+        if (_mediaPlayer != null) _mediaPlayer.Volume = _volume;
+        if (VolumeText != null) VolumeText.Text = $"{_volume}%";
     }
 
     private void SeekSlider_MouseDown(object sender, MouseButtonEventArgs e) => _seekDragging = true;
@@ -458,7 +481,6 @@ public partial class LocalMonitorWindow : Window
             BottomBar.Visibility = Visibility.Visible;
             FullscreenButton.Content = "🗗 Okno (Esc / F11)";
             BottomFullscreenButton.Content = "🗗";
-            SubtitleText.FontSize = 34;
             _hudHideTimer.Stop();
             _hudHideTimer.Start();
 
@@ -475,7 +497,6 @@ public partial class LocalMonitorWindow : Window
             BottomBar.Visibility = Visibility.Visible;
             FullscreenButton.Content = "⛶ Celá obrazovka (F11)";
             BottomFullscreenButton.Content = "⛶";
-            SubtitleText.FontSize = 26;
 
             int winW = Math.Max(680, (int)(monW * 0.80));
             int winH = Math.Max(460, (int)(monH * 0.80));
