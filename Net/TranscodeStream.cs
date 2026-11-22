@@ -27,6 +27,9 @@ public sealed class TranscodeStream : IDisposable
     internal const string YellowSubtitleStyle =
         "FontName=Segoe UI,FontSize=24,Bold=1,PrimaryColour=&H0000FFFF,OutlineColour=&H00000000,BackColour=&H80000000,BorderStyle=1,Outline=2.5,Shadow=1.5,Alignment=2,MarginV=24";
 
+    private const string HttpUserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+
     internal static List<string> BuildArgs(string inputPathOrUrl, string? subtitlePath)
     {
         var args = new List<string>
@@ -39,7 +42,18 @@ public sealed class TranscodeStream : IDisposable
         if (inputPathOrUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             inputPathOrUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
-            args.AddRange(new[] { "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2" });
+            args.AddRange(new[]
+            {
+                "-user_agent", HttpUserAgent,
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "2",
+            });
+            if (inputPathOrUrl.Contains("googlevideo.com", StringComparison.OrdinalIgnoreCase) ||
+                inputPathOrUrl.Contains("youtube.com", StringComparison.OrdinalIgnoreCase))
+            {
+                args.AddRange(new[] { "-headers", "Referer: https://www.youtube.com/\r\nOrigin: https://www.youtube.com\r\n" });
+            }
         }
         else
         {
@@ -49,15 +63,26 @@ public sealed class TranscodeStream : IDisposable
         args.Add("-i");
         args.Add(inputPathOrUrl);
 
-        if (!string.IsNullOrWhiteSpace(subtitlePath))
+        var vf = "scale=trunc(iw/2)*2:trunc(ih/2)*2";
+        if (!string.IsNullOrWhiteSpace(subtitlePath) && File.Exists(subtitlePath))
         {
             var escaped = subtitlePath
                 .Replace("\\", "/", StringComparison.Ordinal)
                 .Replace(":", "\\:", StringComparison.Ordinal)
                 .Replace("'", "\\'", StringComparison.Ordinal);
-            args.Add("-vf");
-            args.Add($"subtitles='{escaped}':charenc=UTF-8:force_style='{YellowSubtitleStyle}'");
+            vf = $"{vf},subtitles='{escaped}':charenc=UTF-8:force_style='{YellowSubtitleStyle}'";
         }
+        else if (!string.IsNullOrWhiteSpace(subtitlePath) && !Path.IsPathRooted(subtitlePath))
+        {
+            // Support relative paths in unit tests
+            var escaped = subtitlePath
+                .Replace("\\", "/", StringComparison.Ordinal)
+                .Replace(":", "\\:", StringComparison.Ordinal)
+                .Replace("'", "\\'", StringComparison.Ordinal);
+            vf = $"{vf},subtitles='{escaped}':charenc=UTF-8:force_style='{YellowSubtitleStyle}'";
+        }
+        args.Add("-vf");
+        args.Add(vf);
 
         args.AddRange(new[]
         {

@@ -72,9 +72,10 @@
                                       IsChecked="True" VerticalAlignment="Center" Margin="0,0,14,0"
                                       Checked="AutoCzechSubtitlesCheck_Changed" Unchecked="AutoCzechSubtitlesCheck_Changed"
                                       ToolTip="Automaticky najde nebo A.I. přeloží české titulky pro YouTube i lokální videa"/>
-                            <CheckBox x:Name="BurnSubtitlesCheck" Content="🔥 Vypálit žluté titulky do obrazu (ffmpeg – vždy čitelné)"
-                                      IsChecked="True" VerticalAlignment="Center" Margin="0,0,16,0"
-                                      Checked="BurnSubtitlesCheck_Changed" Unchecked="BurnSubtitlesCheck_Changed"/>
+                            <CheckBox x:Name="BurnSubtitlesCheck" Content="🔥 Vypálit žluté titulky (ffmpeg – jen pokud TV neumí .srt)"
+                                      IsChecked="False" VerticalAlignment="Center" Margin="0,0,16,0"
+                                      Checked="BurnSubtitlesCheck_Changed" Unchecked="BurnSubtitlesCheck_Changed"
+                                      ToolTip="Vypálí žluté titulky přímo do obrazu (překódování). Pro monitor PC i TV Samsung není potřeba – používají rychlé přímé přehrávání s externími .srt titulky."/>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock Text="▶ Auto přehrávání další skladby:" VerticalAlignment="Center" Margin="0,0,6,0"
                                            Foreground="#FF9824" FontWeight="SemiBold"/>

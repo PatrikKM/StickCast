@@ -278,24 +278,36 @@ public partial class MainWindow
                 if (!item.IsUrl && Mime.FromPath(item.Path).StartsWith("video", StringComparison.OrdinalIgnoreCase))
                     subPath = Subtitles.FindLocalSubtitleSrt(item.Path);
 
-                bool burnLocalSubs = !r.IsLocalMonitor && (transcode || (BurnSubtitlesCheck.IsChecked == true && subPath != null && ScreenStream.IsFfmpegAvailable()));
-                if (burnLocalSubs && (item.IsUrl || !Mime.FromPath(item.Path).StartsWith("image", StringComparison.OrdinalIgnoreCase)))
-                {
-                    var host = await DlnaRenderer.GetHostAddressAsync(r);
-                    var local = NetUtil.GetLocalIpFor(host);
-                    _transcodeStream = new TranscodeStream { Log = s => Dispatcher.BeginInvoke(() => Log(s)) };
-                    const string liveId = "transcode";
-                    _server.RegisterLiveStream(liveId, "video/mp2t", (s, ct) => _transcodeStream.StreamToAsync(item.Path, subPath, s, ct));
-                    var liveUrl = _server.GetLiveUrl(liveId, local);
+                bool transcodeExplicit = !r.IsLocalMonitor && (transcode || (BurnSubtitlesCheck.IsChecked == true && subPath != null && ScreenStream.IsFfmpegAvailable()));
+                bool isImage = !item.IsUrl && Mime.FromPath(item.Path).StartsWith("image", StringComparison.OrdinalIgnoreCase);
 
-                    Log($"Transcode {item} → {liveUrl}");
-                    await r.PlayAsync(liveUrl, item.ToString(), "video/mp2t", isLocal: true);
-                    NowPlayingText.Text = $"🎞 {item}  ({index + 1}/{_files.Count})";
+                if (transcodeExplicit && !isImage)
+                {
+                    await StartPlaylistTranscodeAsync(r, item, index, subPath);
                 }
                 else if (item.IsUrl)
                 {
-                    await r.PlayAsync(item.Path, item.ToString(), Mime.FromUrl(item.Path), isLocal: false);
-                    NowPlayingText.Text = $"📺 {item}  ({index + 1}/{_files.Count})";
+                    var mime = Mime.FromUrl(item.Path);
+                    bool isHls = mime.Equals("application/vnd.apple.mpegurl", StringComparison.OrdinalIgnoreCase) ||
+                                 item.Path.Contains(".m3u8", StringComparison.OrdinalIgnoreCase);
+
+                    if (isHls && ScreenStream.IsFfmpegAvailable())
+                    {
+                        await StartPlaylistTranscodeAsync(r, item, index, subPath);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            await r.PlayAsync(item.Path, item.ToString(), mime, isLocal: false);
+                            NowPlayingText.Text = $"📺 {item}  ({index + 1}/{_files.Count})";
+                        }
+                        catch (DlnaException ex) when (!r.IsLocalMonitor && ScreenStream.IsFfmpegAvailable())
+                        {
+                            Log($"Přímý stream odmítnut ({ex.Message}) – přepínám na ffmpeg MPEG-TS…");
+                            await StartPlaylistTranscodeAsync(r, item, index, subPath);
+                        }
+                    }
                 }
                 else
                 {
@@ -316,8 +328,17 @@ public partial class MainWindow
                     }
 
                     Log($"Soubor {item} → {url}");
-                    await r.PlayAsync(url, item.ToString(), mime, isLocal: true, subtitleUrl: subtitleUrl);
-                    NowPlayingText.Text = $"📁 {item}  ({index + 1}/{_files.Count})";
+                    try
+                    {
+                        await r.PlayAsync(url, item.ToString(), mime, isLocal: true, subtitleUrl: subtitleUrl);
+                        NowPlayingText.Text = $"📁 {item}  ({index + 1}/{_files.Count})";
+                    }
+                    catch (DlnaException ex) when (!r.IsLocalMonitor && !isImage && ScreenStream.IsFfmpegAvailable())
+                    {
+                        Log($"Přehrávač odmítl formát ({ex.Message}) – přepínám na ffmpeg MPEG-TS…");
+                        await StartPlaylistTranscodeAsync(r, item, index, subPath);
+                        return;
+                    }
 
                     if (mime.StartsWith("image", StringComparison.OrdinalIgnoreCase) &&
                         _settings.SlideshowSeconds > 0 && (_files.Count > 1 || _settings.RepeatMode == "one"))
@@ -348,6 +369,20 @@ public partial class MainWindow
             _isStartingPlayback = false;
             _playLock.Release();
         }
+    }
+
+    private async Task StartPlaylistTranscodeAsync(DlnaRenderer r, PlaylistItem item, int index, string? subPath)
+    {
+        var host = await DlnaRenderer.GetHostAddressAsync(r);
+        var local = NetUtil.GetLocalIpFor(host);
+        _transcodeStream = new TranscodeStream { Log = s => Dispatcher.BeginInvoke(() => Log(s)) };
+        const string liveId = "transcode";
+        _server.RegisterLiveStream(liveId, "video/mp2t", (s, ct) => _transcodeStream.StreamToAsync(item.Path, subPath, s, ct));
+        var liveUrl = _server.GetLiveUrl(liveId, local);
+
+        Log($"Transcode {item} → {liveUrl}");
+        await r.PlayAsync(liveUrl, item.ToString(), "video/mp2t", isLocal: true);
+        NowPlayingText.Text = $"🎞 {item}  ({index + 1}/{_files.Count})";
     }
 
     private async Task NextAsync()
