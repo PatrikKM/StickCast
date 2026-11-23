@@ -152,6 +152,38 @@ public partial class MainWindow
             SetStatus("Vyber nejprve video ve výsledcích YouTube.");
     }
 
+    private void OpenBoxInChrome_Click(object sender, RoutedEventArgs e)
+    {
+        var box = UrlBox.Text.Trim();
+        if (box.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            box.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            OpenInChrome(box);
+            return;
+        }
+        if (YtResultsList.SelectedItem is YtSearchResult yt)
+        {
+            OpenInChrome(yt.Url, yt.Title);
+            return;
+        }
+        if (UrlSubTabs.SelectedIndex == 1 && FavoritesList.SelectedItem is UrlEntry fav)
+        {
+            OpenInChrome(fav.Url, fav.Title);
+            return;
+        }
+        if (HistoryList.SelectedItem is UrlEntry hist)
+        {
+            OpenInChrome(hist.Url, hist.Title);
+            return;
+        }
+        if (!string.IsNullOrEmpty(box))
+        {
+            OpenInChrome($"https://www.youtube.com/results?search_query={Uri.EscapeDataString(box)}", box);
+            return;
+        }
+        SetStatus("Zadej URL nebo vyber video pro spuštění v Chrome.");
+    }
+
     private void OpenYtInChrome_Click(object sender, RoutedEventArgs e)
     {
         if (YtResultsList.SelectedItem is YtSearchResult res)

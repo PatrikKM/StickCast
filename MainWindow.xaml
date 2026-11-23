@@ -54,17 +54,20 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="UrlBox" KeyDown="UrlBox_KeyDown"/>
                             <Button Grid.Column="1" Content="▶ Přehrát na TV" Click="PlayUrl_Click"/>
-                            <Button Grid.Column="2" Content="📋 Vložit a přehrát" Style="{StaticResource Secondary}"
+                            <Button Grid.Column="2" Content="🌐 Přehrát v Chrome" Style="{StaticResource Secondary}"
+                                    Click="OpenBoxInChrome_Click" ToolTip="Spustit odkaz nebo vybrané video v prohlížeči Chrome (řeší ověření věku)"/>
+                            <Button Grid.Column="3" Content="📋 Vložit a přehrát" Style="{StaticResource Secondary}"
                                     Click="PasteAndPlay_Click" ToolTip="Vložit odkaz ze schránky a rovnou přehrát"/>
-                            <Button Grid.Column="3" Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}"
+                            <Button Grid.Column="4" Content="📋 Zkopírovat URL" Style="{StaticResource Secondary}"
                                     Click="CopyUrl_Click" ToolTip="Zkopírovat aktuální nebo vybranou URL do schránky"/>
-                            <Button Grid.Column="4" Content="⭐ Do oblíbených" Style="{StaticResource Secondary}"
+                            <Button Grid.Column="5" Content="⭐ Do oblíbených" Style="{StaticResource Secondary}"
                                     Click="AddFavoriteFromBox_Click" ToolTip="Uložit aktuální nebo vybraný odkaz do oblíbených"/>
-                            <Button Grid.Column="5" Content="🔍 Hledat na YouTube" Style="{StaticResource Secondary}" Click="YtSearch_Click"/>
-                            <Button Grid.Column="6" Content="🎵 Hledat na YT Music" Style="{StaticResource Secondary}"
+                            <Button Grid.Column="6" Content="🔍 Hledat na YouTube" Style="{StaticResource Secondary}" Click="YtSearch_Click"/>
+                            <Button Grid.Column="7" Content="🎵 Hledat na YT Music" Style="{StaticResource Secondary}"
                                     Click="YtMusicSearch_Click" ToolTip="Vyhledat skladby na YouTube Music"/>
                         </Grid>
                         <WrapPanel DockPanel.Dock="Top" Margin="4,4,4,0">
