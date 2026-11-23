@@ -1,7 +1,9 @@
+using System.Diagnostics;
 using System.Net;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using Microsoft.Win32;
 using StickCast.Net;
 
 namespace StickCast;
@@ -148,6 +150,92 @@ public partial class MainWindow
             CopyUrlToClipboard(res.Url);
         else
             SetStatus("Vyber nejprve video ve výsledcích YouTube.");
+    }
+
+    private void OpenYtInChrome_Click(object sender, RoutedEventArgs e)
+    {
+        if (YtResultsList.SelectedItem is YtSearchResult res)
+            OpenInChrome(res.Url, res.Title);
+        else if (!string.IsNullOrWhiteSpace(UrlBox.Text) && UrlBox.Text.Trim().StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            OpenInChrome(UrlBox.Text.Trim());
+        else
+            SetStatus("Vyber nejprve video ve výsledcích YouTube.");
+    }
+
+    private void OpenHistoryInChrome_Click(object sender, RoutedEventArgs e)
+    {
+        if (HistoryList.SelectedItem is UrlEntry entry)
+            OpenInChrome(entry.Url, entry.Title);
+        else
+            SetStatus("Vyber položku v historii.");
+    }
+
+    private void OpenFavoriteInChrome_Click(object sender, RoutedEventArgs e)
+    {
+        if (FavoritesList.SelectedItem is UrlEntry entry)
+            OpenInChrome(entry.Url, entry.Title);
+        else
+            SetStatus("Vyber položku v oblíbených.");
+    }
+
+    private void OpenInChrome(string? url, string? title = null)
+    {
+        var clean = url?.Trim() ?? "";
+        if (!Uri.TryCreate(clean, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            SetStatus("Neplatná HTTP/HTTPS URL adresa pro prohlížeč.");
+            return;
+        }
+
+        try
+        {
+            var chromeExe = FindChromeExecutable();
+            if (chromeExe != null)
+            {
+                var psi = new ProcessStartInfo(chromeExe) { UseShellExecute = false };
+                psi.ArgumentList.Add(clean);
+                Process.Start(psi);
+                SetStatus($"🌐 Otevřeno v Google Chrome: {title ?? clean}");
+            }
+            else
+            {
+                Process.Start(new ProcessStartInfo(clean) { UseShellExecute = true });
+                SetStatus($"🌐 Chrome nenalezen – otevřeno ve výchozím prohlížeči: {title ?? clean}");
+            }
+            AddRecentUrl(clean, title);
+        }
+        catch (Exception ex) { ShowError(ex); }
+    }
+
+    private static string? FindChromeExecutable()
+    {
+        string[] candidates =
+        {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Google", "Chrome", "Application", "chrome.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Google", "Chrome", "Application", "chrome.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Google", "Chrome", "Application", "chrome.exe"),
+        };
+
+        foreach (var path in candidates)
+        {
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                return path;
+        }
+
+        foreach (var root in new[] { Registry.CurrentUser, Registry.LocalMachine })
+        {
+            try
+            {
+                using var key = root.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe");
+                var regPath = key?.GetValue(null) as string;
+                if (!string.IsNullOrWhiteSpace(regPath) && File.Exists(regPath))
+                    return regPath;
+            }
+            catch { }
+        }
+
+        return null;
     }
 
     private void CopyUrl_Click(object sender, RoutedEventArgs e)

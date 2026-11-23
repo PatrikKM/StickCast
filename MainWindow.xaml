@@ -92,6 +92,8 @@
                                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
                                     <Button Content="⏭ Další skladba" Padding="9,3" Margin="0,0,6,0"
                                             Click="YtNextTrack_Click" ToolTip="Přehrát další vyhledanou skladbu/video v seznamu"/>
+                                    <Button Content="🌐 Spustit v Chrome" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,6,0"
+                                            Click="OpenYtInChrome_Click" ToolTip="Otevře vybrané video v prohlížeči Chrome (řeší ověření věku na YouTube)"/>
                                     <Button x:Name="YtPrevPageButton" Content="◀ Předchozích 10" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,4,0"
                                             Click="YtPrevPage_Click" ToolTip="Předchozích 10 výsledků"/>
                                     <Button x:Name="YtNextPageButton" Content="Dalších 10 ▶" Style="{StaticResource Secondary}" Padding="8,3" Margin="0,0,8,0"
@@ -110,6 +112,7 @@
                                 <ListBox.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedYt_Click"/>
+                                        <MenuItem Header="🌐 Spustit v Chrome (ověření věku)" Click="OpenYtInChrome_Click"/>
                                         <MenuItem Header="⭐ Přidat do oblíbených" Click="AddYtToFavorites_Click"/>
                                         <MenuItem Header="📋 Zkopírovat URL" Click="CopyYtUrl_Click"/>
                                     </ContextMenu>
@@ -146,6 +149,7 @@
                                             <ListBox.ContextMenu>
                                                 <ContextMenu>
                                                     <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedHistory_Click"/>
+                                                    <MenuItem Header="🌐 Spustit v Chrome" Click="OpenHistoryInChrome_Click"/>
                                                     <MenuItem Header="⭐ Přidat do oblíbených" Click="AddHistoryToFavorites_Click"/>
                                                     <MenuItem Header="📋 Zkopírovat URL" Click="CopyHistoryUrl_Click"/>
                                                     <Separator/>
@@ -197,6 +201,7 @@
                                             <ListBox.ContextMenu>
                                                 <ContextMenu>
                                                     <MenuItem Header="▶ Přehrát na TV" Click="PlaySelectedFavorite_Click"/>
+                                                    <MenuItem Header="🌐 Spustit v Chrome" Click="OpenFavoriteInChrome_Click"/>
                                                     <MenuItem Header="📋 Zkopírovat URL" Click="CopyFavoriteUrl_Click"/>
                                                     <Separator/>
                                                     <MenuItem Header="🗑 Odebrat z oblíbených" Click="RemoveFavorite_Click"/>
