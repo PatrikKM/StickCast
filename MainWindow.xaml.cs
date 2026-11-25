@@ -98,6 +98,7 @@ public partial class MainWindow : Window
         _volumeFromDevice = false;
 
         _uiReady = true;
+        ApplyTheme(_settings.LightTheme);
         PopulateMonitors();
         PopulateLocalMonitorDevices();
         UpdateDeviceControlsState();
@@ -229,6 +230,70 @@ public partial class MainWindow : Window
     private void BurnSubtitlesCheck_Changed(object sender, RoutedEventArgs e)
     {
         if (_uiReady) _settings.BurnSubtitles = BurnSubtitlesCheck.IsChecked == true;
+    }
+
+    private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.LightTheme = !_settings.LightTheme;
+        ApplyTheme(_settings.LightTheme);
+        _settings.Save();
+        SetStatus(_settings.LightTheme ? "Přepnuto na světlý motiv" : "Přepnuto na tmavý motiv (VLC)");
+    }
+
+    private void ApplyTheme(bool light)
+    {
+        var res = Application.Current.Resources;
+        static System.Windows.Media.SolidColorBrush Brush(string hex)
+        {
+            var b = new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex));
+            b.Freeze();
+            return b;
+        }
+
+        if (light)
+        {
+            res["VlcBgDark"] = Brush("#F3F4F6");
+            res["VlcCardBg"] = Brush("#FFFFFF");
+            res["VlcInputBg"] = Brush("#FFFFFF");
+            res["VlcDropdownBg"] = Brush("#E5E7EB");
+            res["VlcTabHoverBg"] = Brush("#D1D5DB");
+            res["VlcListHoverBg"] = Brush("#F3F4F6");
+            res["VlcSecondaryBg"] = Brush("#E5E7EB");
+            res["VlcSecondaryHover"] = Brush("#D1D5DB");
+            res["VlcSecondaryPressed"] = Brush("#C4C9D2");
+            res["VlcSecondaryBorder"] = Brush("#CBD5E1");
+            res["VlcBorder"] = Brush("#D1D5DB");
+            res["VlcTextPrimary"] = Brush("#111827");
+            res["VlcTextBody"] = Brush("#1F2937");
+            res["VlcTextMuted"] = Brush("#4B5563");
+            res["VlcHeaderText"] = Brush("#D96B00");
+            res["VlcOrangeSubtle"] = Brush("#FFF3E0");
+            res["VlcLogBg"] = Brush("#F8FAFC");
+            res["VlcLogFg"] = Brush("#B45309");
+            ThemeToggleButton.Content = "🌙 Tmavý motiv";
+        }
+        else
+        {
+            res["VlcBgDark"] = Brush("#1B1C1F");
+            res["VlcCardBg"] = Brush("#24262B");
+            res["VlcInputBg"] = Brush("#151619");
+            res["VlcDropdownBg"] = Brush("#202227");
+            res["VlcTabHoverBg"] = Brush("#2C2F36");
+            res["VlcListHoverBg"] = Brush("#252830");
+            res["VlcSecondaryBg"] = Brush("#32353E");
+            res["VlcSecondaryHover"] = Brush("#3E424D");
+            res["VlcSecondaryPressed"] = Brush("#282A30");
+            res["VlcSecondaryBorder"] = Brush("#484D59");
+            res["VlcBorder"] = Brush("#383C45");
+            res["VlcTextPrimary"] = Brush("#F3F4F6");
+            res["VlcTextBody"] = Brush("#E5E7EB");
+            res["VlcTextMuted"] = Brush("#A1A7B3");
+            res["VlcHeaderText"] = Brush("#FF9824");
+            res["VlcOrangeSubtle"] = Brush("#3D260A");
+            res["VlcLogBg"] = Brush("#121316");
+            res["VlcLogFg"] = Brush("#FFB357");
+            ThemeToggleButton.Content = "☀ Světlý motiv";
+        }
     }
 
     private void YtAutoPlayCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

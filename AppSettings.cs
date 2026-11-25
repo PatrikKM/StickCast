@@ -22,6 +22,7 @@ public sealed class AppSettings
     public bool AutoCzechSubtitles { get; set; } = true;
     public bool BurnSubtitles { get; set; }
     public bool YtAutoPlayNext { get; set; } = true;
+    public bool LightTheme { get; set; }
     public bool DirectPlayDefaultApplied { get; set; }
     public string HotspotSsid { get; set; } = "WifiDisplay 28C228F2";
     public string HotspotPassword { get; set; } = "12345678";
